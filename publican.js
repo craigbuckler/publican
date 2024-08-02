@@ -1,26 +1,25 @@
-import { join, dirname } from 'node:path';
 import { readdir, mkdir, readFile, writeFile, cp } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
-import markdownit from 'markdown-it';
-import prism from 'markdown-it-prism';
-import { minify } from 'html-minifier-security-fix';
-
-import { createSlug, chunk } from './lib/lib.js';
+import { createSlug, extractFmContent, parseFrontMatter, mdHTML, minifySimple, minifyFull, chunk } from './lib/lib.js';
 import { templateConfig, templateMap, parseTemplate, templateEngine } from './lib/tacs.js';
+
 
 // export for Express
 export { parseTemplate, templateEngine };
 
+
+// main Publican class
 export class Publican {
 
   // private members
   #isDev = (process.env.NODE_ENV === 'development');
-  #md;
   #contentMap = new Map();
   #tagMap = new Map();
+  #now = new Date();
 
   // set defaults
   constructor() {
@@ -43,35 +42,22 @@ export class Publican {
       // number of items per page
       pageListItems: 3,
 
+      // front matter marker
+      frontmatterDelimit: '---',
+
       // markdown options
-      markdownit: {
-        html: true,
-        breaks: false,
-        linkify: true,
-        typographer: true
+      markdownOptions: {
+        core: {
+          html: true,
+          breaks: false,
+          linkify: true,
+          typographer: true
+        },
+        prism: {
+          defaultLanguage: 'js',
+          highlightInlineCode: true
+        }
       },
-
-      // markdown code block options
-      prism: {
-        enabled: true,
-        defaultLanguage: 'js',
-        highlightInlineCode: true
-      },
-
-      // functions to process incoming content files
-      processContent: new Set(),
-
-      // functions to process incoming template files
-      processTemplate: new Set(),
-
-      // content pre-render functions
-      processPreRender: new Set(),
-
-      // functions to process rendered content
-      processRendered: new Set(),
-
-      // directory pass-through { from (relative to project), to (relative to dir.build) }
-      passThrough: new Set(),
 
       // minify options
       minify: {
@@ -91,8 +77,24 @@ export class Publican {
         useShortDoctype: true
       },
 
+      // watch options
       watch: false,
-      watchDebounce: 200
+      watchDebounce: 200,
+
+      // functions to process incoming content files
+      processContent: new Set(),
+
+      // functions to process incoming template files
+      processTemplate: new Set(),
+
+      // content pre-render functions
+      processPreRender: new Set(),
+
+      // functions to process rendered content
+      processRendered: new Set(),
+
+      // directory pass-through { from (relative to project), to (relative to dir.build) }
+      passThrough: new Set(),
 
     };
 
@@ -104,10 +106,6 @@ export class Publican {
 
     performance.mark('build:start');
 
-    // initialize markdown parsing function
-    this.#md = markdownit(this.config.markdownit);
-    if (this.config?.prism?.enabled) this.#md = this.#md.use(prism, this.config.prism);
-
     performance.mark('getContent:start');
 
     // fetch content
@@ -117,7 +115,6 @@ export class Publican {
     performance.mark('getTemplates:start');
 
     // fetch templates
-    templateConfig.dir = templateConfig.dir || {};
     templateConfig.dir.template = this.config.dir.template;
     await this.#getFiles(templateMap, this.config.dir.template, null, null, this.config.processTemplate);
 
@@ -235,7 +232,7 @@ export class Publican {
         map.set(fileslug, render);
 
         // content files
-        if (render?.publish) {
+        if (render?.publish !== false) {
 
           // add directory to tag map
           if (render?.directory !== '.') {
@@ -279,69 +276,29 @@ export class Publican {
   // process content files
   #processContent(fn, str) {
 
-    // front matter delimiter
     const
-      fmDelimit = '---',
-      fInfo = {
-        file: fn,
-        slug: createSlug(fn),
-        directory: dirname(fn),
-        date: new Date(),
-        publish: true
-      };
+      // extract front matter and content
+      fData = extractFmContent(str, this.config.frontmatterDelimit),
 
+      // parse front matter
+      fInfo = parseFrontMatter( fData.fm );
+
+    fInfo.slug = fInfo.slug || createSlug(fn);
     fInfo.link = dirname( join(this.config.root, fInfo.slug) ) + '/';
-
-    str = str.trim();
-    const fmP2 = str.indexOf(fmDelimit, fmDelimit.length);
-
-    if (str.startsWith(fmDelimit) && fmP2 > 0) {
-
-      // extract front matter
-      str.substring(3, fmP2).trim().split(/\n/g).forEach(fm => {
-
-        const fmParse = fm.split(/(^[a-z0-9-_]+):/i);
-
-        if (fmParse.length === 3) {
-          const key = fmParse[1];
-          let value = fmParse[2].trim();
-
-          if (!value) value = true;
-
-          switch (key) {
-
-            case 'date':
-              value = new Date(value);
-              break;
-
-            case 'tags':
-              value = [ ...new Set( value.split(',').map(v => v.trim().replace(/\s+/g, ' ')) ) ];
-              break;
-
-            case 'priority':
-              value = parseFloat(value);
-              break;
-
-            case 'publish':
-              value = value.toLowerCase();
-              value = this.#isDev || !(value === 'draft' || value === 'false' || new Date() < new Date(value));
-              break;
-
-          }
-
-          fInfo[ key ] = value;
-
-        }
-
-      });
-
-      // remove front matter
-      str = str.substring(fmP2 + 3).trim();
-
+    fInfo.directory = dirname(fn),
+    fInfo.date = fInfo.date ? new Date(fInfo.date) : this.#now;
+    fInfo.priority = parseFloat(fInfo.priority) || 0.1;
+    if (fInfo.tags) fInfo.tags = [
+      ...new Set( (fInfo.tags).split(',')
+        .map(v => v.trim().replace(/\s+/g, ' ')) )
+    ];
+    if (fInfo.publish) {
+      const p = fInfo.publish.toLowerCase();
+      fInfo.publish = this.#isDev || !(p === 'draft' || p === 'false' || this.#now < new Date(p));
     }
 
-    // convert markdown
-    fInfo.content = fn.endsWith('.md') ? this.#md.render(str) : str;
+    // convert markdown content
+    fInfo.content = fn.endsWith('.md') ? mdHTML(str, this.config.markdownOptions) : str;
 
     return fInfo;
 
@@ -361,7 +318,7 @@ export class Publican {
     this.#contentMap.forEach((data, file) => {
 
       // draft page
-      if (!data.publish) return;
+      if (data.publish === false) return;
 
       // initial parse
       const slug = data.slug;
@@ -371,7 +328,12 @@ export class Publican {
       this.config.processRendered.forEach(fn => { content = fn(slug, content); });
 
       // minify
-      content = this.#minify(slug, content);
+      const
+        isHTML = slug.endsWith('.html'),
+        isXML = slug.endsWith('.xml');
+
+      if (isHTML || isXML) content = minifySimple(content);
+      if (isHTML && this.config?.minify?.enabled) content = minifyFull(content, this.config.minify);
 
       // hash check
       const hash = createHash('sha1').update(content).digest('base64');
@@ -407,47 +369,6 @@ export class Publican {
     performance.mark('writeFiles:end');
 
     return render.length;
-
-  }
-
-
-  // minify content
-  #minify(fn, str) {
-
-    const
-      isHTML = fn.endsWith('.html'),
-      isXML = fn.endsWith('.xml');
-
-    if (!isHTML && !isXML) return str;
-
-    // initial white space strip
-    str = String(str || '')
-      .replace(/[\u0085\u00a0\u1680\u180e\u2028\u2029\u202f\u205f\u3000]+/g, ' ')
-      .replace(/[\u2000-\u200a]+/g, ' ')
-      .replace(/\u2424/g, '\n')
-      .replace(/\s*?\n/g, '\n')
-      .trim();
-
-    let oc;
-    do {
-      oc = str;
-      str = str.replace(/\n\s*?\n\s*?\n/g, '\n\n');
-
-      // strip XML comments and whitespace
-      if (isXML) {
-        str = str
-          .replace(/<!--.*?-->/g, '')
-          .replace(/\n\n/g, '\n')
-          .replace(/\n\s+</g, '\n<');
-      }
-
-    } while (str !== oc);
-
-    // XML or partial minify
-    if (isXML || !this.config?.minify?.enabled) return str;
-
-    // full HTML minify
-    return minify(str, this.config.minify);
 
   }
 
@@ -500,8 +421,6 @@ export class Publican {
   // create paginated pages
   processPreRenderPaginated(type, sortBy, sortDir = 1, root = '', template) {
 
-    const now = new Date();
-
     return () => {
 
       [...this.#tagMap.keys()]
@@ -545,8 +464,7 @@ export class Publican {
             const fInfo = this.#contentMap.get(slug) || {};
             fInfo.slug = slug;
             fInfo.link = dirname( join(this.config.root, fInfo.slug) ) + '/';
-            fInfo.publish = true;
-            fInfo.date = now;
+            fInfo.date = this.#now;
             fInfo.childPageTotal = childPageTotal;
 
             fInfo.title = fInfo.title || tagName;

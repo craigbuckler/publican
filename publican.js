@@ -53,6 +53,11 @@ export class Publican {
           linkify: true,
           typographer: true
         },
+        headingAnchor: {
+          linkContent: '#',
+          linkClass: 'headlink',
+          headingnavClass: 'contents'
+        },
         prism: {
           defaultLanguage: 'js',
           highlightInlineCode: true
@@ -288,6 +293,8 @@ export class Publican {
     fInfo.directory = dirname(fn),
     fInfo.date = fInfo.date ? new Date(fInfo.date) : this.#now;
     fInfo.priority = parseFloat(fInfo.priority) || 0.1;
+    fInfo.headingnav = (fInfo.headingnav || 'false').toLowerCase();
+    fInfo.headingnav = (fInfo.headingnav !== 'false');
     if (fInfo.tags) fInfo.tags = [
       ...new Set( (fInfo.tags).split(',')
         .map(v => v.trim().replace(/\s+/g, ' ')) )
@@ -298,7 +305,7 @@ export class Publican {
     }
 
     // convert markdown content
-    fInfo.content = fn.endsWith('.md') ? mdHTML(str, this.config.markdownOptions) : str;
+    fInfo.content = fn.endsWith('.md') ? mdHTML(fData.content, this.config.markdownOptions, fInfo.headingnav) : fData.content;
 
     return fInfo;
 
@@ -383,37 +390,6 @@ export class Publican {
     );
 
     performance.mark('passThrough:end');
-
-  }
-
-
-  // create heading anchor and content list (processContent function)
-  processContentHeadAnchor(fn, data) {
-
-    if (data?.slug?.endsWith('.html')) {
-
-      data.contentnav = [];
-
-      data.content = data.content.replace(/<(h[1-6])(.?)>(.+)<\/h[1-6]>/gi,
-        (m, p1, p2, p3) => {
-
-          let id = p3
-            .replace(/[^\w\s]/g, '')
-            .replace(/\s+/g, '-')
-            .toLowerCase();
-
-          const fc = id.slice(0, 1);
-          if (fc < 'a' || fc > 'z') id = 'a-' + id;
-
-          data.contentnav.push(`<a href="#${ id }" class="head-${ p1 }">${ p3 }</a>`);
-
-          return `<${ p1 }${ p2 } id="${ id }" tabindex="-1">${ p3 } <a href="#${ id }" class="head-link">#</a></${ p1 }>`;
-        }
-      );
-
-    }
-
-    return data;
 
   }
 

@@ -1,15 +1,14 @@
 import { readdir, mkdir, readFile, writeFile, cp } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { createHash } from 'node:crypto';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
-import { createSlug, extractFmContent, parseFrontMatter, mdHTML, minifySimple, minifyFull, chunk } from './lib/lib.js';
-import { templateConfig, templateMap, parseTemplate, templateEngine } from './lib/tacs.js';
+import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, minifySimple, minifyFull, chunk, strHash } from './lib/lib.js';
+import { tacs, templateConfig, templateMap, parseTemplate, templateEngine } from './lib/tacs.js';
 
 
 // export for Express
-export { parseTemplate, templateEngine };
+export { parseTemplate, templateEngine, tacs };
 
 
 // main Publican class
@@ -18,8 +17,10 @@ export class Publican {
   // private members
   #isDev = (process.env.NODE_ENV === 'development');
   #contentMap = new Map();
-  #tagMap = new Map();
+  #writeHash = new Map();
   #now = new Date();
+  #watchDebounce = null;
+  #reRendering = false;
 
   // set defaults
   constructor() {
@@ -64,6 +65,24 @@ export class Publican {
         }
       },
 
+      // directory page options
+      dirPages: {
+        paginate: ['article', 'about'],
+        size: 3,
+        sortBy: 'priority',
+        sortDir: -1,
+        template: 'list.html'
+      },
+
+      // tag page options
+      tagPages: {
+        root: 'tag',
+        size: 24,
+        sortBy: 'date',
+        sortDir: -1,
+        template: 'list.html'
+      },
+
       // minify options
       minify: {
         enabled: false,
@@ -84,19 +103,19 @@ export class Publican {
 
       // watch options
       watch: false,
-      watchDebounce: 200,
+      watchDebounce: 300,
 
-      // functions to process incoming content files
+      // event functions to process incoming content files (slug, object)
       processContent: new Set(),
 
-      // functions to process incoming template files
+      // event functions to process incoming template files (slug, string)
       processTemplate: new Set(),
 
-      // content pre-render functions
+      // event content pre-render functions (slug, object)
       processPreRender: new Set(),
 
-      // functions to process rendered content
-      processRendered: new Set(),
+      // event functions to process rendered content (slug, string)
+      processPostRender: new Set(),
 
       // directory pass-through { from (relative to project), to (relative to dir.build) }
       passThrough: new Set(),
@@ -111,19 +130,21 @@ export class Publican {
 
     performance.mark('build:start');
 
-    performance.mark('getContent:start');
-
-    // fetch content
-    await this.#getFiles(this.#contentMap, this.config.dir.content, null, this.#processContent, this.config.processContent);
-
-    performance.mark('getContent:end');
-    performance.mark('getTemplates:start');
-
-    // fetch templates
+    // pass template directory
     templateConfig.dir.template = this.config.dir.template;
-    await this.#getFiles(templateMap, this.config.dir.template, null, null, this.config.processTemplate);
 
-    performance.mark('getTemplates:end');
+    performance.mark('processFiles:start');
+
+    // fetch and process content and template files
+    const file = (await Promise.allSettled([
+      this.#readFileContents(this.config.dir.content),
+      this.#readFileContents(this.config.dir.template),
+    ])).map(f => (f.status === 'fulfilled' ? f.value : new Map()));
+
+    file[0].forEach((content, filename) => this.addContent(filename, content));
+    file[1].forEach((content, filename) => this.addTemplate(filename, content));
+
+    performance.mark('processFiles:end');
 
     // render content
     const written = await this.#render();
@@ -134,54 +155,90 @@ export class Publican {
     performance.mark('build:end');
 
     // output metrics
-    this.#showMetrics(written, ['build', 'getContent', 'getTemplates', 'render', 'writeFiles', 'passThrough']);
-
-    // console.dir(this.#contentMap, { depth: null, color: true });
-    // console.dir(templateMap, { depth: null, color: true });
-    // console.dir(this.#tagMap, { depth: null, color: true });
+    this.#showMetrics(written, ['build', 'processFiles', 'render', 'writeFiles', 'passThrough']);
 
     // watch for file changes
     if (this.config.watch) {
 
       console.log('\nwatching for changes...');
-
-      this.#watcher(this.#contentMap, this.config.dir.content, this.#rebuild.bind(this), this.#processContent, this.config.processContent );
-      this.#watcher(templateMap, this.config.dir.template, this.#rebuild.bind(this), null, this.config.processTemplate );
+      this.#watcher();
 
     }
 
   }
 
+  #watcher() {
 
-  // debounced file watcher
-  #watcher(map, path, callback, processInternal, processCustom) {
-
-    let debounce;
-    watch(path, { recursive: true }, (eventType, fn) => {
-
-      clearTimeout(debounce);
-      debounce = setTimeout(async () => await callback(map, path, fn, processInternal, processCustom), this.config.watchDebounce);
-
+    // watch for content change
+    const contentDir = this.config.dir.content, content = new Set();
+    watch(contentDir, { recursive: true }, (event, fn) => {
+      content.add(fn); wait();
     });
 
-  }
+    // watch for template change
+    const templateDir = this.config.dir.template, template = new Set();
+    watch(templateDir, { recursive: true }, (event, fn) => {
+      template.add(fn); wait();
+    });
 
+    // debounce events
+    const wait = () => {
 
-  // rebuild on file change
-  async #rebuild(map, path, fn, processInternal, processCustom) {
+      clearTimeout(this.#watchDebounce);
+      this.#watchDebounce = setTimeout(reRender, this.config.watchDebounce);
 
-    performance.mark('rebuild:start');
+    };
 
-    // fetch files
-    await this.#getFiles(map, path, fn, processInternal, processCustom);
+    const reRender = async() => {
 
-    // render content
-    const written = await this.#render();
+      // already rendering
+      if (this.#reRendering) {
+        wait();
+        return;
+      }
 
-    performance.mark('rebuild:end');
+      this.#reRendering = true;
 
-    // output metrics
-    this.#showMetrics(written, ['rebuild']);
+      if (!performance.getEntriesByType('mark').length) {
+        performance.mark('rebuild:start');
+      }
+
+      const
+        cFiles = [...content],
+        tFiles = [...template];
+
+      content.clear();
+      template.clear();
+
+      // process content changes
+      await Promise.allSettled(
+        cFiles.map(async f => {
+          const m = await this.#readFileContents(contentDir, f);
+          this.addContent(f, m.get(f));
+        })
+      );
+
+      // process template changes
+      await Promise.allSettled(
+        tFiles.map(async f => {
+          const m = await this.#readFileContents(contentDir, f);
+          this.addTemplate(f, m.get(f));
+        })
+      );
+
+      // render if no more changes
+      if (!content.size && !template.size) {
+
+        const written = await this.#render();
+        performance.mark('rebuild:end');
+        this.#showMetrics(written, ['rebuild']);
+
+      }
+
+      // render complete
+      this.#reRendering = false;
+
+    };
 
   }
 
@@ -207,107 +264,116 @@ export class Publican {
   }
 
 
-  // read and process files
-  async #getFiles(map, srcPath, filePath, processInternal, processCustom) {
+  // read contents of all files into a map
+  async #readFileContents(path, file) {
 
-    // find all files
-    const files = filePath ? [filePath] : await readdir(srcPath, { recursive: true });
+    const
+      fileMap = new Map(),
+      fileList = file ? [file] : await readdir(path, { recursive: true });
 
-    // get file content
-    const fileCont = await Promise.allSettled(
-      files.map(f => readFile( join(srcPath, f), { encoding: 'utf8' } ) )
-    );
+    // read and parse all files
+    (await Promise.allSettled(
+      fileList.map(f => readFile( join(path, f), { encoding: 'utf8' } ) )
+    )).forEach((f, idx) => {
 
-    // process file data and store in map
-    fileCont.forEach((f, idx) => {
-
-      const
-        filename = files[idx],
-        fileslug = srcPath === this.config.dir.template ? filename : createSlug(filename);
-
-      if (f.status === 'fulfilled') {
-
-        // internal processing
-        let render = processInternal ? processInternal.bind(this)(filename, f.value) : f.value;
-
-        // custom processing
-        processCustom.forEach(fn => { render = fn(filename, render); });
-
-        // store in Map
-        map.set(fileslug, render);
-
-        // content files
-        if (render?.publish !== false) {
-
-          // add directory to tag map
-          if (render?.directory !== '.') {
-
-            const
-              tName = 'DIR:' + render.directory,
-              dirList = this.#tagMap.get(tName) || new Set();
-
-            dirList.add(fileslug);
-            this.#tagMap.set(tName, dirList);
-
-          }
-
-          // add tags to tag map
-          render?.tags?.forEach(tag => {
-
-            const
-              tName = 'TAG:' + tag,
-              tagList = this.#tagMap.get(tName) || new Set();
-
-            tagList.add(fileslug);
-            this.#tagMap.set(tName, tagList);
-
-          });
-
-        }
-
-      }
-      else {
-
-        // file not found - delete from Map
-        map.delete(fileslug);
-
-      }
+      fileMap.set(fileList[idx], f.status === 'fulfilled' ? f.value : undefined);
 
     });
+
+    return fileMap;
 
   }
 
 
-  // process content files
-  #processContent(fn, str) {
+  // add and parse content
+  addContent(filename, content) {
+
+    // path error - cannot navigate to parent using '..'
+    if (filename.includes('..')) {
+      throw new Error('Content filename cannot include parent directory .. reference.');
+    }
+
+    // delete from Map
+    if (content === undefined) {
+      this.#contentMap.delete(filename);
+      return;
+    }
 
     const
       // extract front matter and content
-      fData = extractFmContent(str, this.config.frontmatterDelimit),
+      fData = extractFmContent(content, this.config.frontmatterDelimit),
 
       // parse front matter
       fInfo = parseFrontMatter( fData.fm );
 
-    fInfo.slug = fInfo.slug || createSlug(fn);
-    fInfo.link = dirname( join(this.config.root, fInfo.slug) ) + '/';
-    fInfo.directory = dirname(fn),
+    fInfo.filename = filename;
+    fInfo.slug = fInfo.slug || slugify(filename);
+    fInfo.link = join(this.config.root, fInfo.slug).replace(/index\.html/, '');
+    fInfo.directory = dirname( fInfo.slug ).replace(/\/.*$/, '');
     fInfo.date = fInfo.date ? new Date(fInfo.date) : this.#now;
     fInfo.priority = parseFloat(fInfo.priority) || 0.1;
-    fInfo.headingnav = (fInfo.headingnav || 'false').toLowerCase();
-    fInfo.headingnav = (fInfo.headingnav !== 'false');
-    if (fInfo.tags) fInfo.tags = [
-      ...new Set( (fInfo.tags).split(',')
-        .map(v => v.trim().replace(/\s+/g, ' ')) )
-    ];
+    fInfo.headingnav = ((fInfo.headingnav || 'false').toLowerCase() !== 'false');
+
+    // format tags
+    if (fInfo.tags) {
+
+      fInfo.tags = [
+        ...new Set( (fInfo.tags).split(',')
+          .map(v => v.trim().replace(/\s+/g, ' ')) )
+      ];
+
+      // create tag information
+      if (this.config.tagPages) {
+
+        fInfo.tags = fInfo.tags.map(tag => {
+
+          const
+            ref = normalize(tag),
+            slug = join(this.config.tagPages.root || '', ref) + '/index.html',
+            link = join(this.config.root, dirname(slug)) + '/';
+
+          return { tag, ref, link, slug };
+
+        });
+
+      }
+
+    }
+
+
     if (fInfo.publish) {
       const p = fInfo.publish.toLowerCase();
       fInfo.publish = this.#isDev || !(p === 'draft' || p === 'false' || this.#now < new Date(p));
     }
 
     // convert markdown content
-    fInfo.content = fn.endsWith('.md') ? mdHTML(fData.content, this.config.markdownOptions, fInfo.headingnav) : fData.content;
+    fInfo.content = fInfo.slug.endsWith('.html') ?
+      mdHTML(fData.content, this.config.markdownOptions, fInfo.headingnav) :
+      fData.content;
 
-    return fInfo;
+    // custom processing
+    this.config.processContent.forEach(fn => fn(filename, fInfo));
+
+    // store in Map
+    this.#contentMap.set(filename, fInfo);
+
+  }
+
+
+  // add and parse template
+  addTemplate(filename, content) {
+
+    // delete from Map
+    if (content === undefined) {
+      templateMap.delete(filename);
+      return;
+    }
+
+    // custom processing
+    this.config.processTemplate.forEach(fn => { content = fn(filename, content); });
+
+    // store in Map
+    templateMap.set(filename, content);
 
   }
 
@@ -317,39 +383,144 @@ export class Publican {
 
     performance.mark('render:start');
 
-    // custom pre-render processing
-    this.config.processPreRender.forEach(fn => fn());
+    // TACS global content
+    tacs.all = new Map();
+    tacs.dir = new Map();
+    tacs.tag = new Map();
+    tacs.tagList = [];
 
-    // render content
-    const render = [];
-    this.#contentMap.forEach((data, file) => {
+    // tag slug to name map
+    const tagName = new Map();
 
-      // draft page
+    // initial pass
+    this.#contentMap.forEach(data => {
+
+      // is a draft page?
       if (data.publish === false) return;
 
-      // initial parse
-      const slug = data.slug;
-      let content = parseTemplate( templateMap.get(data.template || this.config.defaultTemplate), data );
+      // handle directories
+      const dir = data.directory;
+      if (
+        data.slug !== dir + '/index.html' && // root index page
+        (!this.config.dirPages?.paginate?.length || this.config.dirPages.paginate.includes(dir)) // not required
+      ) {
 
-      // custom render processing
-      this.config.processRendered.forEach(fn => { content = fn(slug, content); });
+        const dirSet = tacs.dir.get( dir ) || [];
+        dirSet.push( data );
+        tacs.dir.set(dir, dirSet);
 
-      // minify
+      }
+
+      // handle tags
+      if (this.config.tagPages && data.tags) data.tags.forEach(t => {
+
+        const tagSet = tacs.tag.get( t.ref ) || [];
+        tagSet.push( data );
+        tacs.tag.set(t.ref, tagSet);
+
+      });
+
+      // pass to TACS
+      tacs.all.set(data.slug, data);
+
+    });
+
+    // directory pages
+    if (this.config.dirPages) {
+
+      const sB = this.config.dirPages.sortBy || 'priority', sD = this.config.dirPages.sortDir || -1;
+
+      // sort by factor then date
+      tacs.dir.forEach((list, dir) => {
+        tacs.dir.set(dir, list.sort( (a, b) => {
+          let s = sD * (a[ sB ] - b[ sB ]);
+          if (!s) s = b.date - a.date;
+          return s;
+        } ) );
+      });
+
+      // paginate
+      this.#paginate(
+        tacs.dir,
+        this.config.dirPages.size || Infinity,
+        this.config.dirPages.root || '',
+        this.config.dirPages.template
+      ).forEach((fInfo, slug) => {
+
+        fInfo.title = fInfo.directory;
+        tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
+
+      });
+
+    }
+
+    // tag pages
+    if (this.config.tagPages) {
+
+      const sB = this.config.tagPages.sortBy || 'date', sD = this.config.tagPages.sortDir || -1;
+
+      // sort pages
+      tacs.tag.forEach((list, ref) => {
+
+        list.sort( (a, b) => sD * (a[ sB ] - b[ sB ]) );
+        tacs.tag.set(ref, list);
+
+        // get top article information
+        const t = list[0].tags.find(t => t.ref === ref);
+        tacs.tagList.push({ tag: t.tag, ref, link: t.link, slug: t.slug, count: list.length });
+        tagName.set(ref, t.tag);
+
+      });
+
+      // sort tag list by frequency
+      tacs.tagList.sort((a, b) => b.count - a.count);
+
+      // paginate
+      this.#paginate(
+        tacs.tag,
+        this.config.tagPages.size || Infinity,
+        this.config.tagPages.root || '',
+        this.config.tagPages.template
+      ).forEach((fInfo, slug) => {
+
+        fInfo.title = tagName.get( fInfo.name );
+        tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
+
+      });
+
+    }
+
+
+    // render content
+    const write = [];
+
+    tacs.all.forEach((data, slug) => {
+
+      // custom pre-render processing
+      this.config.processPreRender.forEach(fn => fn(slug, data));
+
       const
         isHTML = slug.endsWith('.html'),
         isXML = slug.endsWith('.xml');
 
+      // render in template
+      let content = isHTML ?
+        parseTemplate( templateMap.get(data.template || this.config.defaultTemplate), data ) :
+        data.content;
+
+      // custom post-render processing
+      this.config.processPostRender.forEach(fn => { content = fn(slug, content); });
+
+      // minify
       if (isHTML || isXML) content = minifySimple(content);
       if (isHTML && this.config?.minify?.enabled) content = minifyFull(content, this.config.minify);
 
-      // hash check
-      const hash = createHash('sha1').update(content).digest('base64');
+      // hash check and flag for file write
+      const hash = strHash(content);
+      if (this.#writeHash.get(slug) !== hash) {
 
-      if (hash !== data.hash) {
-
-        data.hash = hash;
-        this.#contentMap.set(file, data);
-        render.push({ file, slug, content });
+        this.#writeHash.set(slug, hash);
+        write.push({ slug, content });
 
       }
 
@@ -360,7 +531,7 @@ export class Publican {
 
     // write content to changed files
     await Promise.allSettled(
-      render.map(async f => {
+      write.map(async f => {
 
         const
           permaPath = join(this.config.dir.build, f.slug),
@@ -375,7 +546,7 @@ export class Publican {
 
     performance.mark('writeFiles:end');
 
-    return render.length;
+    return write.length;
 
   }
 
@@ -394,81 +565,52 @@ export class Publican {
   }
 
 
-  // create paginated pages
-  processPreRenderPaginated(type, sortBy, sortDir = 1, root = '', template) {
+  // paginate page lists
+  #paginate(map, size, root, template = this.config.defaultTemplate) {
 
-    return () => {
+    const pages = new Map();
 
-      [...this.#tagMap.keys()]
-        .filter(t => t.startsWith(type))
-        .forEach(tag => {
+    map.forEach((list, name) => {
 
-          // sort pages for each tag
-          const pageSet = [...this.#tagMap.get(tag)]
-            .map(t => this.#contentMap.get(t))
-            .sort((a, b) => {
+      const childPageTotal = list.length;
+      if (!childPageTotal) return;
 
-              if (!sortBy) return 0;
+      const
+        pageItem = chunk( list, size ),
+        pageTotal = pageItem.length;
 
-              const
-                pA = a?.[sortBy] || 0,
-                pB = b?.[sortBy] || 0;
+      for (let p = 0; p < pageTotal; p++) {
 
-              let ret = 0;
-              if (pA < pB) ret = -1;
-              else if (pA > pB) ret = 1;
+        const slug = join(root, name, String(p ? p : ''), '/index.html');
 
-              return ret * sortDir;
-
-            });
-
-          const childPageTotal = pageSet.length;
-          if (!childPageTotal) return;
-
-          // new page data
-          const
-            tagName = tag.slice(4),
-            tagLink = tagName.toLowerCase().replace(/\W/g, '-'),
-            pageItem = chunk( pageSet, this.config.pageListItems ),
-            pageTotal = pageItem.length;
-
-          for (let p = 0; p < pageTotal; p++) {
-
-            const slug = join(root, tagLink, String(p ? p : ''), '/index.html');
-
-            // add/append page details
-            const fInfo = this.#contentMap.get(slug) || {};
-            fInfo.slug = slug;
-            fInfo.link = dirname( join(this.config.root, fInfo.slug) ) + '/';
-            fInfo.date = this.#now;
-            fInfo.childPageTotal = childPageTotal;
-
-            fInfo.title = fInfo.title || tagName;
-            fInfo.tag = fInfo.tag || tagName;
-            fInfo.template = fInfo.template || template || this.config.defaultTemplate;
-
-            fInfo.pagination = {
-              page: pageItem[p],
-              pageTotal,
-              pageCurrent: p,
-              pageCurrent1: p + 1,
-              subpageFrom1: p * this.config.pageListItems + 1,
-              subpageTo1: Math.min(childPageTotal, (p + 1) * this.config.pageListItems),
-              hrefBack: p > 0 ? join(this.config.root, root, tagLink, String(p > 1 ? p-1: ''), '/') : null,
-              hrefNext: p+1 < pageTotal ? join(this.config.root, root, tagLink, String(p+1), '/') : null,
-              href: Array(pageTotal).fill(null).map((e, idx) => join(this.config.root, root, tagLink, String(idx ? idx : ''), '/') )
-            };
-
-            this.#contentMap.set(slug, fInfo);
-
+        pages.set(slug, {
+          name,
+          slug,
+          link: join(this.config.root, slug).replace(/index\.html/, ''),
+          directory: dirname( slug ).replace(/\/.*$/, ''),
+          date: this.#now,
+          priority: 0.1,
+          template: template,
+          childPageTotal,
+          pagination: {
+            page: pageItem[p],
+            pageTotal,
+            pageCurrent: p,
+            pageCurrent1: p + 1,
+            subpageFrom1: p * size + 1,
+            subpageTo1: Math.min(childPageTotal, (p + 1) * size),
+            hrefBack: p > 0 ? join(this.config.root, root, name, String(p > 1 ? p-1: ''), '/') : null,
+            hrefNext: p+1 < pageTotal ? join(this.config.root, root, name, String(p+1), '/') : null,
+            href: Array(pageTotal).fill(null).map((e, idx) => join(this.config.root, root, name, String(idx ? idx : ''), '/') )
           }
-
         });
 
+      }
 
-    };
+    });
+
+    return pages;
 
   }
-
 
 }

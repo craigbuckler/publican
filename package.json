@@ -7,7 +7,9 @@
   "bin": {
     "publican": "./publican.js"
   },
-  "scripts": {},
+  "scripts": {
+    "test": "node --test"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/craigbuckler/publican.git"

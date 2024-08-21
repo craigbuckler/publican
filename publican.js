@@ -34,14 +34,14 @@ export class Publican {
         build:    './build/'
       },
 
-      // default template
-      defaultTemplate: 'default.html',
+      // default HTML template
+      defaultHTMLTemplate: 'default.html',
+
+      // domain
+      domain: 'https://example.com',
 
       // root
       root: '/',
-
-      // number of items per page
-      pageListItems: 3,
 
       // front matter marker
       frontmatterDelimit: '---',
@@ -313,6 +313,7 @@ export class Publican {
     fInfo.date = fInfo.date ? new Date(fInfo.date) : this.#now;
     fInfo.priority = parseFloat(fInfo.priority) || 0.1;
     fInfo.headingnav = ((fInfo.headingnav || 'false').toLowerCase() !== 'false');
+    fInfo.content = fData.content;
 
     // format tags
     if (fInfo.tags) {
@@ -340,16 +341,15 @@ export class Publican {
 
     }
 
-
+    // publication
     if (fInfo.publish) {
       const p = fInfo.publish.toLowerCase();
       fInfo.publish = this.#isDev || !(p === 'draft' || p === 'false' || this.#now < new Date(p));
     }
 
-    // convert markdown content
-    fInfo.content = fInfo.slug.endsWith('.html') ?
-      mdHTML(fData.content, this.config.markdownOptions, fInfo.headingnav) :
-      fData.content;
+    // index frequency
+    fInfo.index = fInfo.index || 'monthly';
+    if (fInfo.index.toLowerCase() === 'false') fInfo.index = false;
 
     // custom processing
     this.config.processContent.forEach(fn => fn(filename, fInfo));
@@ -384,6 +384,10 @@ export class Publican {
     performance.mark('render:start');
 
     // TACS global content
+    tacs.config = {
+      domain: this.config.domain,
+      root: this.config.root,
+    };
     tacs.all = new Map();
     tacs.dir = new Map();
     tacs.tag = new Map();
@@ -430,13 +434,24 @@ export class Publican {
 
       const sB = this.config.dirPages.sortBy || 'priority', sD = this.config.dirPages.sortDir || -1;
 
-      // sort by factor then date
       tacs.dir.forEach((list, dir) => {
-        tacs.dir.set(dir, list.sort( (a, b) => {
+
+        // sort by factor then date
+        list.sort( (a, b) => {
           let s = sD * (a[ sB ] - b[ sB ]);
           if (!s) s = b.date - a.date;
           return s;
-        } ) );
+        } );
+
+        tacs.dir.set(dir, list);
+
+        // next and back articles
+        for (let a = 0; a < list.length; a++) {
+          const data = list[a];
+          data.postnext = a > 0 ? list[a - 1] : null;
+          data.postback = a < list.length - 1 ? list[a + 1] : null;
+        }
+
       });
 
       // paginate
@@ -503,9 +518,18 @@ export class Publican {
         isHTML = slug.endsWith('.html'),
         isXML = slug.endsWith('.xml');
 
+      // convert markdown
+      if (data?.filename?.toLowerCase().endsWith('.md')) {
+        data.content = mdHTML(data.content, this.config.markdownOptions, data.headingnav);
+      }
+
+      // parse content block values
+      data.content = parseTemplate(data.content, data);
+
       // render in template
-      let content = isHTML ?
-        parseTemplate( templateMap.get(data.template || this.config.defaultTemplate), data ) :
+      const useTemplate = data.template || (isHTML && this.config.defaultHTMLTemplate);
+      let content = useTemplate ?
+        parseTemplate( templateMap.get(useTemplate), data ) :
         data.content;
 
       // custom post-render processing
@@ -566,7 +590,7 @@ export class Publican {
 
 
   // paginate page lists
-  #paginate(map, size, root, template = this.config.defaultTemplate) {
+  #paginate(map, size, root, template) {
 
     const pages = new Map();
 

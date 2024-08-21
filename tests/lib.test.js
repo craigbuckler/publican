@@ -1,4 +1,4 @@
-import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, minifySimple, chunk, strHash } from '../lib/lib.js';
+import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, headingAnchor, minifySimple, chunk, strHash } from '../lib/lib.js';
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
@@ -111,25 +111,26 @@ describe('lib.js/parseFrontMatter function', () => {
 });
 
 
-describe('lib.js/mdHTML function', () => {
+describe('lib.js/mdHTML and headingAnchor functions', () => {
 
-  const markdownOptions = {
-    core: {
-      html: true,
-      breaks: false,
-      linkify: true,
-      typographer: true
+  const
+    markdownOptions = {
+      core: {
+        html: true,
+        breaks: false,
+        linkify: true,
+        typographer: true
+      },
+      prism: {
+        defaultLanguage: 'js',
+        highlightInlineCode: true
+      }
     },
-    headingAnchor: {
+    headingAnchorOptions = {
       linkContent: '#',
       linkClass: 'headlink',
       headingnavClass: 'contents'
-    },
-    prism: {
-      defaultLanguage: 'js',
-      highlightInlineCode: true
-    }
-  };
+    };
 
   [
 
@@ -156,7 +157,7 @@ describe('lib.js/mdHTML function', () => {
 
     it(
       `mdHTML test ${ idx + 1 }`,
-      () => assert.strictEqual(minifySimple( mdHTML( set.md, markdownOptions, set.headingNav )), set.html)
+      () => assert.strictEqual(minifySimple( headingAnchor( mdHTML( set.md, markdownOptions ), headingAnchorOptions, set.headingNav ) ), set.html)
     );
 
   });

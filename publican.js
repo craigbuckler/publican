@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
-import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, minifySimple, minifyFull, chunk, strHash } from './lib/lib.js';
+import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, headingAnchor, minifySimple, minifyFull, chunk, strHash } from './lib/lib.js';
 import { tacs, templateConfig, templateMap, parseTemplate, templateEngine } from './lib/tacs.js';
 
 
@@ -54,15 +54,17 @@ export class Publican {
           linkify: true,
           typographer: true
         },
-        headingAnchor: {
-          linkContent: '#',
-          linkClass: 'headlink',
-          headingnavClass: 'contents'
-        },
         prism: {
           defaultLanguage: 'js',
           highlightInlineCode: true
         }
+      },
+
+      // heading anchors
+      headingAnchor: {
+        linkContent: '#',
+        linkClass: 'headlink',
+        headingnavClass: 'contents'
       },
 
       // directory page options
@@ -520,11 +522,16 @@ export class Publican {
 
       // convert markdown
       if (data?.filename?.toLowerCase().endsWith('.md')) {
-        data.content = mdHTML(data.content, this.config.markdownOptions, data.headingnav);
+        data.content = mdHTML(data.content, this.config.markdownOptions);
       }
 
       // parse content block values
       data.content = parseTemplate(data.content, data);
+
+      // create heading anchors
+      if (isHTML && this.config.headingAnchor) {
+        data.content = headingAnchor(data.content, this.config.headingAnchor, data.headingnav);
+      }
 
       // render in template
       const useTemplate = data.template || (isHTML && this.config.defaultHTMLTemplate);

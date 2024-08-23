@@ -12,7 +12,7 @@ Features:
 
 To do:
 
-- plugins for sitemaps
+-
 
 
 ## Front matter
@@ -48,8 +48,11 @@ Posts have the following properties in the `data` object:
 
 ## Notes
 
-Avoid JavaScript expressions within markdown content. Simple expressions are generally fine, e.g. `${ data.title }` but complex expressions such as `${ data.all.map(i => i.title).join() }` can be altered by the markdown processor. To work around this, you can:
+Avoid JavaScript expressions within markdown content. Simple expressions are generally fine, e.g. `${ data.title }` but complex expressions such as `${ data.all.map(i => i.title) }` can be altered by the markdown processor. To work around this, you can:
 
+1. Use the notation `${{ expression }}` to denote a real expression.
 1. Move the expressions into a template file.
-1. Create a tacs function to simplify the expression.
+1. Create a jsTACS function to simplify the expression.
 1. Change the `.md` file to `.html` and edit accordingly.
+
+Using `` ` `` backticks or `${` in any file where you want the characters to be shown can cause rendering issues. Replace with `&#96;` and `&#36;{` accordingly.

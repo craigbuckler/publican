@@ -517,12 +517,15 @@ export class Publican {
       this.config.processPreRender.forEach(fn => fn(slug, data));
 
       const
+        isMD = data?.filename?.toLowerCase().endsWith('.md'),
         isHTML = slug.endsWith('.html'),
         isXML = slug.endsWith('.xml');
 
       // convert markdown
-      if (data?.filename?.toLowerCase().endsWith('.md')) {
-        data.content = mdHTML(data.content, this.config.markdownOptions);
+      if (isMD) {
+        data.content = mdHTML(data.content, this.config.markdownOptions)
+          .replace(/(<span class="token[^>]*>)`/ig, '$1&#96;')       // replace code backticks
+          .replace(/(<span class="token[^>]*>)\$\{/ig, '$1&#36;{');  // replace code ${ characters
       }
 
       // parse content block values

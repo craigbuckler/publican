@@ -7,10 +7,8 @@ A tiny, simple, and very fast static site generator.
 Features:
 
 - uses lightweight ESM
-- standard JavaScript backtick templating
+- standard JavaScript backtick templating: `${ expression }`
 - processes `${ expression }` at build time and `!{ expression }` at runtime so it's possible to pre-build Express.js templates
-
-To do:
 
 -
 
@@ -50,7 +48,7 @@ Posts have the following properties in the `data` object:
 
 Avoid JavaScript expressions within markdown content. Simple expressions are generally fine, e.g. `${ data.title }` but complex expressions such as `${ data.all.map(i => i.title) }` can be altered by the markdown processor. To work around this, you can:
 
-1. Use the notation `${{ expression }}` to denote a real expression.
+1. Use the notation `${{ expression }}` to denote a real outer expression.
 1. Move the expressions into a template file.
 1. Create a jsTACS function to simplify the expression.
 1. Change the `.md` file to `.html` and edit accordingly.

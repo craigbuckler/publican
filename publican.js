@@ -4,11 +4,11 @@ import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
 import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, headingAnchor, minifySimple, minifyFull, chunk, strHash } from './lib/lib.js';
-import { tacs, templateConfig, templateMap, parseTemplate, templateEngine } from './lib/tacs.js';
+import { tacs, tacsConfig, templateMap, templateParse, templateEngine } from './lib/tacs.js';
 
 
-// export for Express
-export { parseTemplate, templateEngine, tacs };
+// export for Express (not needed for peer dependency)
+export { tacs, templateEngine };
 
 
 // main Publican class
@@ -133,7 +133,7 @@ export class Publican {
     performance.mark('build:start');
 
     // pass template directory
-    templateConfig.dir.template = this.config.dir.template;
+    tacsConfig.dir.template = this.config.dir.template;
 
     performance.mark('processFiles:start');
 
@@ -529,7 +529,7 @@ export class Publican {
       }
 
       // parse content block values
-      data.content = parseTemplate(data.content, data);
+      data.content = templateParse(data.content, data);
 
       // create heading anchors
       if (isHTML && this.config.headingAnchor) {
@@ -539,7 +539,7 @@ export class Publican {
       // render in template
       const useTemplate = data.template || (isHTML && this.config.defaultHTMLTemplate);
       let content = useTemplate ?
-        parseTemplate( templateMap.get(useTemplate), data ) :
+        templateParse( templateMap.get(useTemplate), data ) :
         data.content;
 
       // custom post-render processing

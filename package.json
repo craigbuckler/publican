@@ -4,9 +4,6 @@
   "description": "Simple and fast static site generator",
   "main": "publican.js",
   "type": "module",
-  "bin": {
-    "publican": "./publican.js"
-  },
   "scripts": {
     "test": "node --test"
   },
@@ -21,7 +18,8 @@
     "ssg"
   ],
   "files": [
-    "index.js"
+    "publican.js",
+    "lib/*"
   ],
   "engines": {
     "node": ">= 20.0.0"
@@ -34,6 +32,7 @@
   "homepage": "https://github.com/craigbuckler/publican#readme",
   "dependencies": {
     "html-minifier-security-fix": "^4.0.0",
+    "jstacs": "^0.1.0",
     "markdown-it": "^14.1.0",
     "markdown-it-prism": "^2.3.0"
   }

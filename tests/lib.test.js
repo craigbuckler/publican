@@ -1,4 +1,4 @@
-import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, headingAnchor, minifySimple, chunk, strHash } from '../lib/lib.js';
+import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, headingAnchor, minifySimple, chunk, strReplacer, strHash } from '../lib/lib.js';
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
@@ -191,6 +191,47 @@ describe('lib.js/chunk function', () => {
     it(
       `chunk test ${ idx + 1 }`,
       () => assert.deepStrictEqual(chunk( set.in, set.chunkSize ), set.out)
+    );
+
+  });
+
+});
+
+
+describe('lib.js/strReplacer function', () => {
+
+  // replacement map
+  const map = new Map([
+    ['__DATE__', '01-02-2030'],
+    ['__ROOT__', '/root/'],
+    [/cat/ig, 'dog'],
+    [/<img src="(.+?)".*?>/ig, '<a href="$1"><img src="$1" width="100" height="100" /></a>']
+  ]);
+
+  [
+
+    {
+      str: 'Today\'s date is __DATE__',
+      out: 'Today\'s date is 01-02-2030'
+    },
+    {
+      str: '<a href="__ROOT____DATE__">__DATE__</a>',
+      out: '<a href="/root/01-02-2030">01-02-2030</a>'
+    },
+    {
+      str: 'My cat is cuter than your cat on __DATE__.',
+      out: 'My dog is cuter than your dog on 01-02-2030.'
+    },
+    {
+      str: '<img src="i1.jpg">\n<img src="i2.png">\n',
+      out: '<a href="i1.jpg"><img src="i1.jpg" width="100" height="100" /></a>\n<a href="i2.png"><img src="i2.png" width="100" height="100" /></a>\n'
+    },
+
+  ].forEach((set, idx) => {
+
+    it(
+      `strReplacer test ${ idx + 1 }`,
+      () => assert.deepStrictEqual(strReplacer( set.str, map ), set.out)
     );
 
   });

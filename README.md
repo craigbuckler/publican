@@ -2,20 +2,45 @@
 
 A tiny, simple, and very fast static site generator.
 
-*Still very much an alpha product! Use at your peril.*
+*This is an alpha product: please use at your own discretion.*
 
 Features:
 
-- uses lightweight ESM
-- standard JavaScript backtick templating: `${ expression }`
-- processes `${ expression }` at build time and `!{ expression }` at runtime so it's possible to pre-build Express.js templates
+* lightweight EcmaScript module
+* standard JavaScript template literal `${ expression }`
+* `!{ expression }` is ignored to the initial render so it can be evaluated at runtime. It's possible to pre-build templates so only runtime data remains.
+* automatic creation of paginated post and tag lists
 
--
+
+## Usage
+
+Install into your project with `npm i publican`
+
+Create:
+
+1. Markdown or other content files in `./src/content/`
+1. HTML template files in `./src/template/`
+
+Create a `publican.config.js` or similar file for configuration with content such as:
+
+```js
+import { Publican } from 'publican';
+
+const publican = new Publican();
+
+// watch for changes
+publican.config.watch = false;
+
+// build site
+await publican.build();
+```
+
+Build the site to `./build/` with `node publican.config.js`.
 
 
 ## Front matter
 
-You can add any front matter but the following values control publication:
+You can add any front matter to content files but the following values control publication:
 
 |name|description|
 |-|-|

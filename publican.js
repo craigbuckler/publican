@@ -3,12 +3,12 @@ import { join, dirname } from 'node:path';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
-import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, headingAnchor, minifySimple, minifyFull, chunk, strHash } from './lib/lib.js';
-import { tacs, tacsConfig, templateMap, templateParse, templateEngine } from './lib/tacs.js';
+import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, headingAnchor, minifySimple, minifyFull, chunk, strReplacer, strHash } from './lib/lib.js';
+import { tacsConfig, tacs, templateMap, templateParse } from 'jstacs';
 
 
-// export for Express (not needed for peer dependency)
-export { tacs, templateEngine };
+// export jsTACS
+export * from 'jstacs';
 
 
 // main Publican class
@@ -70,7 +70,7 @@ export class Publican {
       // directory page options
       dirPages: {
         paginate: ['article', 'about'],
-        size: 3,
+        size: 24,
         sortBy: 'priority',
         sortDir: -1,
         template: 'list.html'
@@ -103,10 +103,6 @@ export class Publican {
         useShortDoctype: true
       },
 
-      // watch options
-      watch: false,
-      watchDebounce: 300,
-
       // event functions to process incoming content files (slug, object)
       processContent: new Set(),
 
@@ -121,6 +117,13 @@ export class Publican {
 
       // directory pass-through { from (relative to project), to (relative to dir.build) }
       passThrough: new Set(),
+
+      // replacer
+      replace: new Map(),
+
+      // watch options
+      watch: false,
+      watchDebounce: 300,
 
     };
 
@@ -541,6 +544,11 @@ export class Publican {
       let content = useTemplate ?
         templateParse( templateMap.get(useTemplate), data ) :
         data.content;
+
+      // custom replacements
+      if (this.config.replace.size) {
+        content = strReplacer(content, this.config.replace);
+      }
 
       // custom post-render processing
       this.config.processPostRender.forEach(fn => { content = fn(slug, content); });

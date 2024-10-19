@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
-import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, headingAnchor, minifySimple, minifyFull, chunk, strReplacer, strHash } from './lib/lib.js';
+import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, minifyFull, chunk, strReplacer, strHash } from './lib/lib.js';
 import { tacsConfig, tacs, templateMap, templateParse } from 'jstacs';
 
 
@@ -69,7 +69,6 @@ export class Publican {
 
       // directory page options
       dirPages: {
-        paginate: ['article', 'about'],
         size: 24,
         sortBy: 'priority',
         sortDir: -1,
@@ -317,8 +316,9 @@ export class Publican {
     fInfo.directory = dirname( fInfo.slug ).replace(/\/.*$/, '');
     fInfo.date = fInfo.date ? new Date(fInfo.date) : this.#now;
     fInfo.priority = parseFloat(fInfo.priority) || 0.1;
-    fInfo.headingnav = ((fInfo.headingnav || 'false').toLowerCase() !== 'false');
-    fInfo.content = fData.content;
+    fInfo.isMD = fInfo.filename?.toLowerCase().endsWith('.md'),
+    fInfo.isHTML = fInfo.slug.endsWith('.html'),
+    fInfo.isXML = fInfo.slug.endsWith('.xml');
 
     // format tags
     if (fInfo.tags) {
@@ -355,6 +355,12 @@ export class Publican {
     // index frequency
     fInfo.index = fInfo.index || 'monthly';
     if (fInfo.index.toLowerCase() === 'false') fInfo.index = false;
+
+    // content - convert markdown to HTML if necessary
+    fInfo.content = fInfo.isMD ? mdHTML(fData.content, this.config.markdownOptions) : fData.content;
+
+    // ensure pages using data.contentRendered are processed last
+    fInfo.renderPriority = fInfo.content.includes('.contentRendered') ? -2 : 0;
 
     // custom processing
     this.config.processContent.forEach(fn => fn(filename, fInfo));
@@ -410,8 +416,10 @@ export class Publican {
       // handle directories
       const dir = data.directory;
       if (
-        data.slug !== dir + '/index.html' && // root index page
-        (!this.config.dirPages?.paginate?.length || this.config.dirPages.paginate.includes(dir)) // not required
+        data.link !== '/' &&
+        data.slug !== dir + '/index.html' &&
+        data.title &&
+        data.index !== false
       ) {
 
         const dirSet = tacs.dir.get( dir ) || [];
@@ -510,40 +518,29 @@ export class Publican {
 
     }
 
+    // render content in renderPriority order
+    const
+      write = [],
+      allByPriority = Array.from(tacs.all, ([, data]) => data).sort((a, b) => b.renderPriority - a.renderPriority);
 
-    // render content
-    const write = [];
+    allByPriority.forEach(data => {
 
-    tacs.all.forEach((data, slug) => {
+      // get slug
+      const slug = data.slug;
 
       // custom pre-render processing
       this.config.processPreRender.forEach(fn => fn(slug, data));
 
-      const
-        isMD = data?.filename?.toLowerCase().endsWith('.md'),
-        isHTML = slug.endsWith('.html'),
-        isXML = slug.endsWith('.xml');
-
-      // convert markdown
-      if (isMD) {
-        data.content = mdHTML(data.content, this.config.markdownOptions)
-          .replace(/(<span class="token[^>]*>)`/ig, '$1&#96;')       // replace code backticks
-          .replace(/(<span class="token[^>]*>)\$\{/ig, '$1&#36;{');  // replace code ${ characters
-      }
-
-      // parse content block values
-      data.content = templateParse(data.content, data);
-
-      // create heading anchors
-      if (isHTML && this.config.headingAnchor) {
-        data.content = headingAnchor(data.content, this.config.headingAnchor, data.headingnav);
-      }
-
       // render in template
-      const useTemplate = data.template || (isHTML && this.config.defaultHTMLTemplate);
+      const useTemplate = data.template || (data.isHTML && this.config.defaultHTMLTemplate);
       let content = useTemplate ?
         templateParse( templateMap.get(useTemplate), data ) :
-        data.content;
+        templateParse(data.content, data);
+
+      // <nav-heading> content anchors
+      if (this.config.headingAnchor) {
+        content = navHeading(content, this.config.headingAnchor);
+      }
 
       // custom replacements
       if (this.config.replace.size) {
@@ -554,8 +551,11 @@ export class Publican {
       this.config.processPostRender.forEach(fn => { content = fn(slug, content); });
 
       // minify
-      if (isHTML || isXML) content = minifySimple(content);
-      if (isHTML && this.config?.minify?.enabled) content = minifyFull(content, this.config.minify);
+      if (data.isXML) content = minifySimple(content);
+      if (data.isHTML && this.config?.minify?.enabled) content = minifyFull(content, this.config.minify);
+
+      // store rendered content
+      data.contentRendered = content.replace(/\$\{/g, '!{');
 
       // hash check and flag for file write
       const hash = strHash(content);
@@ -632,6 +632,7 @@ export class Publican {
           directory: dirname( slug ).replace(/\/.*$/, ''),
           date: this.#now,
           priority: 0.1,
+          renderPriority: -1,
           template: template,
           childPageTotal,
           pagination: {

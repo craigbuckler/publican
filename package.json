@@ -2,8 +2,9 @@
   "name": "publican",
   "version": "0.1.0",
   "description": "Simple and fast static site generator",
-  "main": "publican.js",
   "type": "module",
+  "main": "publican.js",
+  "exports": "./publican.js",
   "scripts": {
     "test": "node --test"
   },

@@ -1,4 +1,4 @@
-import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, headingAnchor, minifySimple, chunk, strReplacer, strHash } from '../lib/lib.js';
+import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, chunk, strReplacer, strHash } from '../lib/lib.js';
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
@@ -136,20 +136,17 @@ describe('lib.js/mdHTML and headingAnchor functions', () => {
 
     {
       md: '## Heading 2\n\nContent\n\n### Heading 3\n\ntext 123\n\ntext abc',
-      headingNav: false,
       html: '<h2 id="heading-2" tabindex="-1">Heading 2 <a href="#heading-2" class="headlink">#</a></h2>\n<p>Content</p>\n<h3 id="heading-3" tabindex="-1">Heading 3 <a href="#heading-3" class="headlink">#</a></h3>\n<p>text 123</p>\n<p>text abc</p>'
     },
 
     {
       md: '## Heading 2\n\nContent\n\n## Heading 2\n\ntext 123\n\ntext abc',
-      headingNav: false,
       html: '<h2 id="heading-2" tabindex="-1">Heading 2 <a href="#heading-2" class="headlink">#</a></h2>\n<p>Content</p>\n<h2 id="heading-2-2" tabindex="-1">Heading 2 <a href="#heading-2-2" class="headlink">#</a></h2>\n<p>text 123</p>\n<p>text abc</p>'
     },
 
     {
-      md: '## Heading 2\n\nContent\n\n### Heading 3\n\ntext 123\n\n## Heading 2\n\ntext abc',
-      headingNav: true,
-      html: '<nav class="contents">\n<ol><li>\n<a href="#heading-2" class="head-h2">Heading 2</a>\n<ol><li>\n<a href="#heading-3" class="head-h3">Heading 3</a>\n</li></ol>\n</li>\n<li><a href="#heading-2-2" class="head-h2">Heading 2</a>\n</li></ol></nav>\n<h2 id="heading-2" tabindex="-1">Heading 2 <a href="#heading-2" class="headlink">#</a></h2>\n<p>Content</p>\n<h3 id="heading-3" tabindex="-1">Heading 3 <a href="#heading-3" class="headlink">#</a></h3>\n<p>text 123</p>\n<h2 id="heading-2-2" tabindex="-1">Heading 2 <a href="#heading-2-2" class="headlink">#</a></h2>\n<p>text abc</p>'
+      md: '<nav-heading></nav-heading>\n\n# Main title\n\n## Heading 2\n\nContent\n\n### Heading 3\n\ntext 123\n\n## Heading 2\n\ntext abc',
+      html: '<nav-heading><nav class="contents">\n<ol><li>\n<a href="#heading-2" class="head-h2">Heading 2</a>\n<ol><li>\n<a href="#heading-3" class="head-h3">Heading 3</a>\n</li></ol>\n</li>\n<li><a href="#heading-2-2" class="head-h2">Heading 2</a>\n</li></ol></nav>\n</nav-heading>\n<h1>Main title</h1>\n<h2 id="heading-2" tabindex="-1">Heading 2 <a href="#heading-2" class="headlink">#</a></h2>\n<p>Content</p>\n<h3 id="heading-3" tabindex="-1">Heading 3 <a href="#heading-3" class="headlink">#</a></h3>\n<p>text 123</p>\n<h2 id="heading-2-2" tabindex="-1">Heading 2 <a href="#heading-2-2" class="headlink">#</a></h2>\n<p>text abc</p>'
     }
 
 
@@ -157,7 +154,7 @@ describe('lib.js/mdHTML and headingAnchor functions', () => {
 
     it(
       `mdHTML test ${ idx + 1 }`,
-      () => assert.strictEqual(minifySimple( headingAnchor( mdHTML( set.md, markdownOptions ), headingAnchorOptions, set.headingNav ) ), set.html)
+      () => assert.strictEqual(minifySimple( navHeading( mdHTML( set.md, markdownOptions ), headingAnchorOptions ) ), set.html)
     );
 
   });

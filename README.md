@@ -8,7 +8,7 @@ Features:
 
 * lightweight EcmaScript module
 * standard JavaScript template literal `${ expression }`
-* `!{ expression }` is ignored to the initial render so it can be evaluated at runtime. It's possible to pre-build templates so only runtime data remains.
+* `!{ expression }` are evaluated at runtime so a partially-built template can be used by Express.js or others. The expressions are converted to `${ expression }` so they can be parsed by jsTACS
 * automatic creation of paginated post and tag lists
 
 
@@ -48,8 +48,12 @@ You can add any front matter to content files but the following values control p
 |`publish`|date of publication or `draft` determine whether post is published|
 |`priority`|post priority from 0 - 1 (most important)|
 |`index`|indexing frequency (daily, weekly, monthly, yearly) or `false` to not index|
-|`headingnav`|set `true` to define the article's table of contents|
 |`tags`|comma-delimited list of tags|
+
+
+## Content
+
+Add a `<nav-heading></nav-heading>` element in any content to add a contents section to the page at that point.
 
 
 ## Post properties
@@ -67,15 +71,17 @@ Posts have the following properties in the `data` object:
 |`priority`|post priority from 0 - 1|
 |`index`|indexing frequency (daily, weekly, monthly, yearly) or `false` if not indexed|
 |`tags`|array of tag objects: { tag, ref, link, slug }|
+|`content`|page content (without templates)|
+|`contentRendered`|final rendered page content (post templating)|
 
 
 ## Notes
 
-Avoid JavaScript expressions within markdown content. Simple expressions are generally fine, e.g. `${ data.title }` but complex expressions such as `${ data.all.map(i => i.title) }` can be altered by the markdown processor. To work around this, you can:
+Avoid JavaScript expressions in markdown content. Simple expressions are generally fine, e.g. `${ data.title }` but complex expressions such as `${ data.all.map(i => i.title) }` can be altered by the markdown processor. To work around this, you can:
 
-1. Use the notation `${{ expression }}` to denote a real outer expression.
+1. Use the notation `${{ expression }}` to denote a real expression.
 1. Move the expressions into a template file.
 1. Create a jsTACS function to simplify the expression.
-1. Change the `.md` file to `.html` and edit accordingly.
+1. Change the `.md` file to `.html` and create HTML instead.
 
-Using `` ` `` backticks or `${` in any file where you want the characters to be shown can cause rendering issues. Replace with `&#96;` and `&#36;{` accordingly.
+Escape `` ` `` backticks and `${` using `&#96;` and `&#36;{` accordingly when you want those characters to be shown rather than rendered.

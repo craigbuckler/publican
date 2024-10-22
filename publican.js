@@ -64,7 +64,8 @@ export class Publican {
       headingAnchor: {
         linkContent: '#',
         linkClass: 'headlink',
-        headingnavClass: 'contents'
+        navClass: 'contents',
+        tag: 'nav-heading'
       },
 
       // directory page options
@@ -418,7 +419,6 @@ export class Publican {
       if (
         data.link !== '/' &&
         data.slug !== dir + '/index.html' &&
-        data.title &&
         data.index !== false
       ) {
 
@@ -521,6 +521,7 @@ export class Publican {
     // render content in renderPriority order
     const
       write = [],
+      navHeadingTag = '</' + (this.config?.headingAnchor?.tag || 'nav-heading') + '>',
       allByPriority = Array.from(tacs.all, ([, data]) => data).sort((a, b) => b.renderPriority - a.renderPriority);
 
     allByPriority.forEach(data => {
@@ -531,20 +532,38 @@ export class Publican {
       // custom pre-render processing
       this.config.processPreRender.forEach(fn => fn(slug, data));
 
-      // render in template
-      const useTemplate = data.template || (data.isHTML && this.config.defaultHTMLTemplate);
-      let content = useTemplate ?
-        templateParse( templateMap.get(useTemplate), data ) :
-        templateParse(data.content, data);
+      // render content only
+      let
+        content = templateParse(data.content, data),
+        contentNav = '';
 
-      // <nav-heading> content anchors
-      if (this.config.headingAnchor) {
-        content = navHeading(content, this.config.headingAnchor);
+      // content anchors
+      if (this.config.headingAnchor && data.isHTML) {
+        const nav = navHeading(content, this.config.headingAnchor);
+        content = nav.content;
+        contentNav = nav.navHeading;
       }
 
       // custom replacements
-      if (this.config.replace.size) {
-        content = strReplacer(content, this.config.replace);
+      content = strReplacer( content, this.config?.replace );
+
+      // store rendered content (for feeds)
+      data.contentRendered = content.replace(/\$\{/g, '!{');
+
+      // render in template
+      const useTemplate = data.template || (data.isHTML && this.config.defaultHTMLTemplate);
+      if (useTemplate) {
+
+        content = strReplacer(
+          templateParse( templateMap.get(useTemplate), data ),
+          this.config?.replace
+        );
+
+      }
+
+      // replace navigation heading
+      if (contentNav) {
+        content = content.replaceAll(navHeadingTag, contentNav + navHeadingTag);
       }
 
       // custom post-render processing
@@ -553,9 +572,6 @@ export class Publican {
       // minify
       if (data.isXML) content = minifySimple(content);
       if (data.isHTML && this.config?.minify?.enabled) content = minifyFull(content, this.config.minify);
-
-      // store rendered content
-      data.contentRendered = content.replace(/\$\{/g, '!{');
 
       // hash check and flag for file write
       const hash = strHash(content);

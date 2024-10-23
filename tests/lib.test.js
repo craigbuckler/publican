@@ -20,6 +20,7 @@ describe('lib.js/slugify function', () => {
     ['tag/post.md', 'tag/post/index.html'],
     ['tag/post.html', 'tag/post/index.html'],
     ['tag/post.json', 'tag/post.json'],
+    ['win\\dir\\index.md', 'win/dir/index.html'],
 
   ].forEach(set => {
 

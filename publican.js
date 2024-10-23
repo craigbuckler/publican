@@ -1,5 +1,5 @@
 import { readdir, mkdir, readFile, writeFile, cp } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { sep, join, dirname } from 'node:path';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
@@ -313,8 +313,8 @@ export class Publican {
 
     fInfo.filename = filename;
     fInfo.slug = fInfo.slug || slugify(filename);
-    fInfo.link = join(this.config.root, fInfo.slug).replace(/index\.html/, '');
-    fInfo.directory = dirname( fInfo.slug ).replace(/\/.*$/, '');
+    fInfo.link = join(this.config.root, fInfo.slug).replace(/index\.html/, '').replaceAll(sep, '/');
+    fInfo.directory = dirname( fInfo.slug ).replaceAll(sep, '/').replace(/\/.*$/, '');
     fInfo.date = fInfo.date ? new Date(fInfo.date) : this.#now;
     fInfo.priority = parseFloat(fInfo.priority) || 0.1;
     fInfo.isMD = fInfo.filename?.toLowerCase().endsWith('.md'),
@@ -336,8 +336,8 @@ export class Publican {
 
           const
             ref = normalize(tag),
-            slug = join(this.config.tagPages.root || '', ref) + '/index.html',
-            link = join(this.config.root, dirname(slug)) + '/';
+            slug = join(this.config.tagPages.root || '', ref).replaceAll(sep, '/') + '/index.html',
+            link = join(this.config.root, dirname(slug)).replaceAll(sep, '/') + '/';
 
           return { tag, ref, link, slug };
 
@@ -639,13 +639,13 @@ export class Publican {
 
       for (let p = 0; p < pageTotal; p++) {
 
-        const slug = join(root, name, String(p ? p : ''), '/index.html');
+        const slug = join(root, name, String(p ? p : ''), '/index.html').replaceAll(sep, '/');
 
         pages.set(slug, {
           name,
           slug,
-          link: join(this.config.root, slug).replace(/index\.html/, ''),
-          directory: dirname( slug ).replace(/\/.*$/, ''),
+          link: join(this.config.root, slug).replaceAll(sep, '/').replace(/index\.html/, ''),
+          directory: dirname( slug ).replaceAll(sep, '/').replace(/\/.*$/, ''),
           date: this.#now,
           priority: 0.1,
           renderPriority: -1,

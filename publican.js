@@ -46,6 +46,9 @@ export class Publican {
       // front matter marker
       frontmatterDelimit: '---',
 
+      // default indexing frequency
+      indexFrequency: 'monthly',
+
       // markdown options
       markdownOptions: {
         core: {
@@ -82,7 +85,8 @@ export class Publican {
         size: 24,
         sortBy: 'date',
         sortDir: -1,
-        template: 'list.html'
+        template: 'list.html',
+        index: 'monthly'
       },
 
       // minify options
@@ -109,10 +113,10 @@ export class Publican {
       // event functions to process incoming template files (slug, string)
       processTemplate: new Set(),
 
-      // event content pre-render functions (slug, object)
+      // event content pre-render functions (data object)
       processPreRender: new Set(),
 
-      // event functions to process rendered content (slug, string)
+      // event functions to process rendered content (data object, string)
       processPostRender: new Set(),
 
       // directory pass-through { from (relative to project), to (relative to dir.build) }
@@ -354,7 +358,7 @@ export class Publican {
     }
 
     // index frequency
-    fInfo.index = fInfo.index || 'monthly';
+    fInfo.index = fInfo.index || this.config.indexFrequency;
     if (fInfo.index.toLowerCase() === 'false') fInfo.index = false;
 
     // content - convert markdown to HTML if necessary
@@ -512,10 +516,56 @@ export class Publican {
       ).forEach((fInfo, slug) => {
 
         fInfo.title = tagName.get( fInfo.name );
+        fInfo.index = this.config.tagPages.index || false;
         tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
 
       });
 
+    }
+
+    // create navigation menu object from slugs
+    const nav = {};
+    tacs.all.forEach(data => {
+
+      if (!data.index) return;
+
+      const sPath = data.slug.split('/');
+      if (sPath.length === 1) sPath.unshift('/');
+
+      let navMap = nav;
+      while (sPath.length) {
+
+        const p = sPath.shift();
+
+        if (p === 'index.html') {
+          navMap.title = data.title;
+          navMap.menu = data.menu;
+          navMap.link = data.link || '';
+          navMap.priority = data.priority;
+          navMap.date = data.date;
+        }
+
+        if (sPath.length) {
+          navMap[p] = navMap[p] || { children: {} };
+          navMap = navMap[p];
+          navMap.title = navMap.title || p;
+          if (sPath.length > 1) {
+            navMap = navMap.children;
+          }
+        }
+
+      }
+
+    });
+
+    // convert nav objects to arrays and sort
+    tacs.nav = recurseNav(nav);
+    function recurseNav(obj) {
+      const ret = Object.values(obj).sort( (a, b) => (b.priority - a.priority) || (b.date - a.date) );
+      ret.forEach(n => {
+        n.children = recurseNav( n.children );
+      });
+      return ret;
     }
 
     // render content in renderPriority order
@@ -530,7 +580,7 @@ export class Publican {
       const slug = data.slug;
 
       // custom pre-render processing
-      this.config.processPreRender.forEach(fn => fn(slug, data));
+      this.config.processPreRender.forEach(fn => fn(data));
 
       // render content only
       let
@@ -567,7 +617,7 @@ export class Publican {
       }
 
       // custom post-render processing
-      this.config.processPostRender.forEach(fn => { content = fn(slug, content); });
+      this.config.processPostRender.forEach(fn => { content = fn(data, content); });
 
       // minify
       if (data.isXML) content = minifySimple(content);

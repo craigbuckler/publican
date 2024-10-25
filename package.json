@@ -13,6 +13,7 @@
     "url": "git+https://github.com/craigbuckler/publican.git"
   },
   "keywords": [
+    "html",
     "static",
     "site",
     "generator",

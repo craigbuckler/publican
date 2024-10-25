@@ -157,7 +157,15 @@ describe('lib.js/mdHTML and headingAnchor functions', () => {
         content: '<h1>Main title</h1>\n<h2 id="heading-2" tabindex="-1">Heading 2 <a href="#heading-2" class="headlink">#</a></h2>\n<p>Content</p>\n<h3 id="heading-3" tabindex="-1">Heading 3 <a href="#heading-3" class="headlink">#</a></h3>\n<p>text 123</p>\n<h2 id="heading-2-2" tabindex="-1">Heading 2 <a href="#heading-2-2" class="headlink">#</a></h2>\n<p>text abc</p>',
         navHeading: '<nav class="contents">\n<ol><li>\n<a href="#heading-2" class="head-h2">Heading 2</a>\n<ol><li>\n<a href="#heading-3" class="head-h3">Heading 3</a>\n</li></ol>\n</li>\n<li><a href="#heading-2-2" class="head-h2">Heading 2</a>\n</li></ol>\n</nav>'
       }
-    }
+    },
+
+    {
+      md: '```html\n<h1>${ data.title }</h1>\n```\n\nInline `${ data.title }`{language=html}\n\n${ data.title }',
+      out: {
+        content: '<pre class="language-html"><code class="language-html"><span class="line"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>h1</span><span class="token punctuation">></span></span>&#36;{ data.title }<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>h1</span><span class="token punctuation">></span></span></span>\n</code></pre>\n<p>Inline <code class="language-html">&#36;{ data.title }</code></p>\n<p>${ data.title }</p>',
+        navHeading: ''
+      }
+    },
 
 
   ].forEach((set, idx) => {

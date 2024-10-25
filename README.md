@@ -32,6 +32,8 @@ cd mysite
 npm init
 ```
 
+Add `"type": "module",` to `package.json` to use EcmaScript modules by default.
+
 Install Publican:
 
 ```sh
@@ -77,7 +79,7 @@ The template above includes a partial at `src/template/_partials/header.html`:
 </header>
 ```
 
-Create a configuration file in the project root, e.g. `publican.config.js`:
+Create a configuration file in the project root, e.g. `publican.config.js` (use a `.mjs` extension if `"type": "module",` is not set in `package.json`):
 
 ```js
 import { Publican } from 'publican';

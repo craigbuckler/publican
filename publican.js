@@ -527,7 +527,7 @@ export class Publican {
     const nav = {};
     tacs.all.forEach(data => {
 
-      if (!data.index) return;
+      if (!data.index || data?.pagination?.pageCurrent) return;
 
       const sPath = data.slug.split('/');
       if (sPath.length === 1) sPath.unshift('/');
@@ -708,9 +708,9 @@ export class Publican {
             pageCurrent1: p + 1,
             subpageFrom1: p * size + 1,
             subpageTo1: Math.min(childPageTotal, (p + 1) * size),
-            hrefBack: p > 0 ? join(this.config.root, root, name, String(p > 1 ? p-1: ''), '/') : null,
-            hrefNext: p+1 < pageTotal ? join(this.config.root, root, name, String(p+1), '/') : null,
-            href: Array(pageTotal).fill(null).map((e, idx) => join(this.config.root, root, name, String(idx ? idx : ''), '/') )
+            hrefBack: p > 0 ? join(this.config.root, root, name, String(p > 1 ? p-1: ''), '/').replaceAll(sep, '/') : null,
+            hrefNext: p+1 < pageTotal ? join(this.config.root, root, name, String(p+1), '/').replaceAll(sep, '/') : null,
+            href: Array(pageTotal).fill(null).map((e, idx) => join(this.config.root, root, name, String(idx ? idx : ''), '/').replaceAll(sep, '/') )
           }
         });
 

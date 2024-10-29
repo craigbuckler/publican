@@ -3,7 +3,7 @@ import { sep, join, dirname } from 'node:path';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
-import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, minifyFull, chunk, strReplacer, strHash } from './lib/lib.js';
+import { slugify, properCase, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, minifyFull, chunk, strReplacer, strHash } from './lib/lib.js';
 import { tacsConfig, tacs, templateMap, templateParse } from 'jstacs';
 
 
@@ -86,6 +86,7 @@ export class Publican {
         sortBy: 'date',
         sortDir: -1,
         template: 'list.html',
+        menu: false,
         index: 'monthly'
       },
 
@@ -357,6 +358,9 @@ export class Publican {
       fInfo.publish = this.#isDev || !(p === 'draft' || p === 'false' || this.#now < new Date(p));
     }
 
+    // menu
+    if (fInfo.menu?.toLowerCase() === 'false') fInfo.menu = false;
+
     // index frequency
     fInfo.index = fInfo.index || this.config.indexFrequency;
     if (fInfo.index.toLowerCase() === 'false') fInfo.index = false;
@@ -479,7 +483,7 @@ export class Publican {
         this.config.dirPages.template
       ).forEach((fInfo, slug) => {
 
-        fInfo.title = fInfo.directory;
+        fInfo.title = properCase(fInfo.directory);
         tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
 
       });
@@ -516,6 +520,7 @@ export class Publican {
       ).forEach((fInfo, slug) => {
 
         fInfo.title = tagName.get( fInfo.name );
+        fInfo.menu = this.config.tagPages.menu;
         fInfo.index = this.config.tagPages.index || false;
         tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
 
@@ -527,7 +532,7 @@ export class Publican {
     const nav = {};
     tacs.all.forEach(data => {
 
-      if (!data.index || data?.pagination?.pageCurrent) return;
+      if (data.menu === false || data.pagination?.pageCurrent) return;
 
       const sPath = data.slug.split('/');
       if (sPath.length === 1) sPath.unshift('/');
@@ -538,17 +543,15 @@ export class Publican {
         const p = sPath.shift();
 
         if (p === 'index.html') {
-          navMap.title = data.title;
-          navMap.menu = data.menu;
-          navMap.link = data.link || '';
-          navMap.priority = data.priority;
-          navMap.date = data.date;
+          navMap.data = data;
         }
 
         if (sPath.length) {
-          navMap[p] = navMap[p] || { children: {} };
+          navMap[p] = navMap[p] || { data: {}, children: {} };
           navMap = navMap[p];
-          navMap.title = navMap.title || p;
+          navMap.data.title = navMap.data.title || p.replace(/\W/g, ' ').trim().replace(/\s+/g, ' ');
+          navMap.data.priority = navMap.data.priority || 0.1;
+          navMap.data.date = navMap.data.date || this.#now;
           if (sPath.length > 1) {
             navMap = navMap.children;
           }
@@ -561,7 +564,7 @@ export class Publican {
     // convert nav objects to arrays and sort
     tacs.nav = recurseNav(nav);
     function recurseNav(obj) {
-      const ret = Object.values(obj).sort( (a, b) => (b.priority - a.priority) || (b.date - a.date) );
+      const ret = Object.values(obj).sort( (a, b) => (b.data.priority - a.data.priority) || (b.data.date - a.data.date) );
       ret.forEach(n => {
         n.children = recurseNav( n.children );
       });

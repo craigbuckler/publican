@@ -103,7 +103,7 @@ You can add any front matter to content files but the following values control p
 |name|description|
 |-|-|
 |`title`|page title (optional)|
-|`menu`|title used on menus (optional)|
+|`menu`|title used on menus or set `false` to omit (optional)|
 |`slug`|page slug (optional)|
 |`template`|HTML template filename (in template directory)|
 |`tags`|comma-delimited list of tags|
@@ -132,8 +132,8 @@ Post information can be analysed and used in templates with a `data` object that
 |`publish`|false if the post is not to published|
 |`priority`|post priority from 0 - 1|
 |`isMD`|content provided in markdown format|
-|`isHTML`|content rendered to HTML|
-|`isXML`|content rendered to XML|
+|`isHTML`|content is rendered to HTML|
+|`isXML`|content is rendered to XML|
 |`index`|indexing frequency (daily, weekly, monthly, yearly) or `false` if not indexed|
 |`tags`|array of tag objects: { tag, ref, link, slug }|
 |`content`|page content|
@@ -171,7 +171,7 @@ The following values are available in all pages:
 |`tacs.dir`|Map object of all posts in a root directory. Returns an array of posts.|
 |`tacs.tag`|Map object of all tags. Returns an array of posts.|
 |`tacs.tagList`|array of tag objects: { tag, ref (normalized tag), link, slug, count }|
-|`tacs.nav`|array of navigation item objects: { title, menu, link, priority, date, children [] }|
+|`tacs.nav`|nested array of navigation item objects: { data: {}, children [ { data,children },... ] }|
 
 
 ## Publican configuration

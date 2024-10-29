@@ -1,6 +1,6 @@
 {
   "name": "publican",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Simple and fast HTML-first static site generator",
   "type": "module",
   "main": "publican.js",
@@ -27,6 +27,10 @@
     "node": ">= 20.0.0"
   },
   "author": "Craig Buckler",
+  "funding": {
+    "type": "individual",
+    "url": "https://github.com/sponsors/craigbuckler"
+  },
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/craigbuckler/publican/issues"

@@ -1,4 +1,4 @@
-import { slugify, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, chunk, strReplacer, strHash } from '../lib/lib.js';
+import { slugify, properCase, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, chunk, strReplacer, strHash } from '../lib/lib.js';
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
@@ -17,6 +17,7 @@ describe('lib.js/slugify function', () => {
     ['article.md', 'article/index.html'],
     ['article/!index.html', 'article/index.html'],
     ['article/#index.md', 'article/index.html'],
+    ['article/an-index.md', 'article/an-index/index.html'],
     ['tag/post.md', 'tag/post/index.html'],
     ['tag/post.html', 'tag/post/index.html'],
     ['tag/post.json', 'tag/post.json'],
@@ -31,6 +32,33 @@ describe('lib.js/slugify function', () => {
     it(
       `slugify ${ input.padEnd(pad) } => ${ output.padEnd(pad) }`,
       () => assert.strictEqual(slugify( input ), output)
+    );
+
+  });
+
+});
+
+
+describe('lib.js/properCase function', () => {
+
+  const pad = 18;
+
+  [
+
+    ['Already valid'],
+    ['directory-name', 'Directory name'],
+    ['postname-', 'Postname'],
+    ['-- article --', 'Article'],
+
+  ].forEach(set => {
+
+    const
+      input = set[0],
+      output = set[1] || set[0];
+
+    it(
+      `properCase ${ input.padEnd(pad) } => ${ output.padEnd(pad) }`,
+      () => assert.strictEqual(properCase( input ), output)
     );
 
   });

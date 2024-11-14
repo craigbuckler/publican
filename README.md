@@ -75,7 +75,7 @@ The template above includes a partial at `src/template/_partials/header.html`:
 
 ```html
 <header>
-  <nav><a href="${ tacs.config.root }">HOME</a></nav>
+  <nav><a href="${ tacs.root }">HOME</a></nav>
 </header>
 ```
 
@@ -84,6 +84,9 @@ Create a configuration file in the project root, e.g. `publican.config.js` (use 
 ```js
 import { Publican } from 'publican';
 const publican = new Publican();
+
+// clear build directory (optional)
+await publican.clean();
 
 // build site
 await publican.build();
@@ -112,6 +115,8 @@ You can add any front matter to content files but the following values control p
 |`priority`|post priority from 0 (least important) to 1 (most important)|
 |`index`|indexing frequency (daily, weekly, monthly, yearly) or `false` to not index|
 
+Note that front matter can contain `${ expressions }`.
+
 
 ## Content
 
@@ -120,7 +125,7 @@ Add a `<nav-heading></nav-heading>` element in any content or template to add a 
 
 ## Post properties
 
-Post information can be analysed and used in templates with a `data` object that has the following properties (as well as any others you set):
+Post information can be analysed and used in templates with a `data` object that has the front matter properties above, any custom properties you set, and the following properties:
 
 |name|description|
 |-|-|
@@ -138,6 +143,7 @@ Post information can be analysed and used in templates with a `data` object that
 |`tags`|array of tag objects: { tag, ref, link, slug }|
 |`content`|page content|
 |`contentRendered`|final rendered page content (post templating)|
+|`wordCount`|content word count|
 |`postnext`|`data` object of the next post in the directory|
 |`postback`|`data` object the previous post in the directory|
 |`pagination`|[pagination data](#pagination-properties)|
@@ -166,7 +172,7 @@ The following values are available in all pages:
 
 |name|description|
 |-|-|
-|`tacs.config`|properties: `.domain`, `.root`|
+|`tacs.root`|root build directory (defaults to `/`)|
 |`tacs.all`|Map object of all posts indexed by slug|
 |`tacs.dir`|Map object of all posts in a root directory. Returns an array of posts.|
 |`tacs.tag`|Map object of all tags. Returns an array of posts.|
@@ -184,7 +190,6 @@ Publican configuration is set in a `publican.config` object with the following p
 |`.dir.template`|template directory (`./src/template/`)|
 |`.dir.build`|build directory (`./build/`)|
 |`.defaultHTMLTemplate`|default template for HTML files (`default.html`)|
-|`.domain`|site domain (`https://example.com`)|
 |`.root`|root path (`/`)|
 |`.frontmatterDelimit`|front matter delimiter (`---`)|
 |`.indexFrequency`|default indexing frequency (`monthly`). Set `false` to prevent sitemap indexing|
@@ -202,6 +207,7 @@ Publican configuration is set in a `publican.config` object with the following p
 |`.processPostRender`|function hook Set post rendering (`slug`, `string`) - returns string|
 |`.watch`|enable watch mode (`false`)|
 |`.watchDebounce`|watch debounce in milliseconds (`300`)|
+|`.logLevel`|log verbosity, `0` to `2` (`2`)|
 
 
 ### Pass-through files

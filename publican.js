@@ -1,4 +1,9 @@
-import { readdir, mkdir, readFile, writeFile, cp } from 'node:fs/promises';
+/*
+Publican HTML-first Static Site Generator
+https://www.npmjs.com/package/publican
+By Craig Buckler
+*/
+import { readdir, mkdir, rm, readFile, writeFile, cp } from 'node:fs/promises';
 import { sep, join, dirname } from 'node:path';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
@@ -37,9 +42,6 @@ export class Publican {
       // default HTML template
       defaultHTMLTemplate: 'default.html',
 
-      // domain
-      domain: 'https://example.com',
-
       // root
       root: '/',
 
@@ -76,7 +78,7 @@ export class Publican {
         size: 24,
         sortBy: 'priority',
         sortDir: -1,
-        template: 'list.html'
+        template: 'default.html'
       },
 
       // tag page options
@@ -85,7 +87,7 @@ export class Publican {
         size: 24,
         sortBy: 'date',
         sortDir: -1,
-        template: 'list.html',
+        template: 'default.html',
         menu: false,
         index: 'monthly'
       },
@@ -130,7 +132,23 @@ export class Publican {
       watch: false,
       watchDebounce: 300,
 
+      // output verbosity
+      logLevel: 2,
+
     };
+
+  }
+
+
+  // clean build directory
+  async clean() {
+
+    try {
+      await rm(this.config.dir.build, { recursive: true });
+    }
+    catch (e) {
+      if (this.config.logLevel > 1) console.warn(`\n[Publican] unable to delete ${ this.config.dir.build } build directory\n           ${ e }`);
+    }
 
   }
 
@@ -170,7 +188,7 @@ export class Publican {
     // watch for file changes
     if (this.config.watch) {
 
-      console.log('\nwatching for changes...');
+      if (this.config.logLevel > 0) console.info('\n[Publican] watching for changes...');
       this.#watcher();
 
     }
@@ -256,16 +274,18 @@ export class Publican {
   // show performance metrics
   #showMetrics(written, metrics = []) {
 
-    if (written) {
+    if (written && this.config.logLevel) {
 
-      console.log('   files output:' + String(written).padStart(5, ' '));
+      console.info('[Publican] files output:' + String(written).padStart(5, ' '));
 
-      metrics.forEach(m => {
+      if (this.config.logLevel > 1) {
+        metrics.forEach(m => {
 
-        const p = Math.ceil( performance.measure(m, m + ':start', m + ':end').duration);
-        console.log(m.padStart(15,' ') + ':' + String(p).padStart(5, ' ') + 'ms');
+          const p = Math.ceil( performance.measure(m, m + ':start', m + ':end').duration);
+          console.info(m.padStart(23,' ') + ':' + String(p).padStart(5, ' ') + 'ms');
 
-      });
+        });
+      }
 
     }
 
@@ -365,6 +385,18 @@ export class Publican {
     fInfo.index = fInfo.index || this.config.indexFrequency;
     if (fInfo.index.toLowerCase() === 'false') fInfo.index = false;
 
+    // word count
+    fInfo.wordCount = 0;
+    if (fInfo.index !== false) {
+      fInfo.wordCount = 1 + ((fInfo.title || '') + ' ' + fData.content)
+        .replace(/<.+?>/g, ' ')
+        .replace(/\W/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\S/g, '')
+        .length;
+    }
+
     // content - convert markdown to HTML if necessary
     fInfo.content = fInfo.isMD ? mdHTML(fData.content, this.config.markdownOptions) : fData.content;
 
@@ -404,10 +436,7 @@ export class Publican {
     performance.mark('render:start');
 
     // TACS global content
-    tacs.config = {
-      domain: this.config.domain,
-      root: this.config.root,
-    };
+    tacs.root = this.config.root;
     tacs.all = new Map();
     tacs.dir = new Map();
     tacs.tag = new Map();
@@ -532,7 +561,7 @@ export class Publican {
     const nav = {};
     tacs.all.forEach(data => {
 
-      if (data.menu === false || data.pagination?.pageCurrent) return;
+      if (data.pagination?.pageCurrent) return;
 
       const sPath = data.slug.split('/');
       if (sPath.length === 1) sPath.unshift('/');
@@ -607,10 +636,15 @@ export class Publican {
       const useTemplate = data.template || (data.isHTML && this.config.defaultHTMLTemplate);
       if (useTemplate) {
 
+        const contentOrig = data.content;
+        data.content = content;
+
         content = strReplacer(
           templateParse( templateMap.get(useTemplate), data ),
           this.config?.replace
         );
+
+        data.content = contentOrig;
 
       }
 

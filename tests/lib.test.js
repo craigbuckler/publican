@@ -140,7 +140,7 @@ describe('lib.js/parseFrontMatter function', () => {
 });
 
 
-describe('lib.js/mdHTML and headingAnchor functions', () => {
+describe('lib.js/mdHTML and navHeading functions', () => {
 
   const
     markdownOptions = {

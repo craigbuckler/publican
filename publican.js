@@ -249,7 +249,7 @@ export class Publican {
       // process template changes
       await Promise.allSettled(
         tFiles.map(async f => {
-          const m = await this.#readFileContents(contentDir, f);
+          const m = await this.#readFileContents(templateDir, f);
           this.addTemplate(f, m.get(f));
         })
       );

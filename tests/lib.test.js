@@ -188,9 +188,9 @@ describe('lib.js/mdHTML and navHeading functions', () => {
     },
 
     {
-      md: '```html\n<h1>${ data.title }</h1>\n```\n\nInline `${ data.title }`{language=html}\n\n${ data.title }',
+      md: '```html\n<h1>${ data.title }</h1>\n```\n\nInline `${ data.title }`{language=html}\n\n${ data.title }\n\n${{ data.render }}\n\n!{ data.runtime }',
       out: {
-        content: '<pre class="language-html"><code class="language-html"><span class="line"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>h1</span><span class="token punctuation">></span></span>&#36;{ data.title }<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>h1</span><span class="token punctuation">></span></span></span>\n</code></pre>\n<p>Inline <code class="language-html">&#36;{ data.title }</code></p>\n<p>${ data.title }</p>',
+        content: '<pre class="language-html"><code class="language-html"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>h1</span><span class="token punctuation">></span></span>&#36;{ data.title }<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>h1</span><span class="token punctuation">></span></span>\n</code></pre>\n<p>Inline <code class="language-html">&#36;{ data.title }</code></p>\n<p>${ data.title }</p>\n<p>${ data.render }</p>\n<p>!{ data.runtime }</p>',
         navHeading: ''
       }
     },

@@ -629,8 +629,11 @@ export class Publican {
       // custom replacements
       content = strReplacer( content, this.config?.replace );
 
+      // add !{ strings back
+      content = content.replace(/\$\{/g, '!{');
+
       // store rendered content (for feeds)
-      data.contentRendered = content.replace(/\$\{/g, '!{');
+      data.contentRendered = content;
 
       // render in template
       const useTemplate = data.template || (data.isHTML && this.config.defaultHTMLTemplate);

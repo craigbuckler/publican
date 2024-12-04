@@ -498,8 +498,8 @@ export class Publican {
         // next and back articles
         for (let a = 0; a < list.length; a++) {
           const data = list[a];
-          data.postnext = a > 0 ? list[a - 1] : null;
-          data.postback = a < list.length - 1 ? list[a + 1] : null;
+          data.postback = a > 0 ? list[a - 1] : null;
+          data.postnext = a < list.length - 1 ? list[a + 1] : null;
         }
 
       });

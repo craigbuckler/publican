@@ -4,7 +4,7 @@ https://www.npmjs.com/package/publican
 By Craig Buckler
 */
 import { readdir, mkdir, rm, readFile, writeFile, cp } from 'node:fs/promises';
-import { sep, join, dirname } from 'node:path';
+import { sep, join, dirname, basename } from 'node:path';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
@@ -44,6 +44,12 @@ export class Publican {
 
       // root
       root: '/',
+
+      // ignore content filename regex (ignores files starting _)
+      ignoreContentFile: /^_.*$/,
+
+      // slug replacements
+      slugReplace: new Map(),
 
       // front matter marker
       frontmatterDelimit: '---',
@@ -323,6 +329,11 @@ export class Publican {
       throw new Error('Content filename cannot include parent directory .. reference.');
     }
 
+    // ignore files matching regex
+    if (this.config.ignoreContentFile && basename(filename).match(this.config.ignoreContentFile)) {
+      return;
+    }
+
     // delete from Map
     if (content === undefined) {
       this.#contentMap.delete(filename);
@@ -337,17 +348,20 @@ export class Publican {
       fInfo = parseFrontMatter( fData.fm );
 
     fInfo.filename = filename;
-    fInfo.slug = fInfo.slug || slugify(filename);
+    fInfo.slug = fInfo.slug || slugify(filename, this.config.slugReplace);
+    if (!fInfo.slug || typeof fInfo.slug !== 'string' || fInfo.slug.includes('..')) {
+      throw new Error(`Invalid slug "${ fInfo.slug }" for file: ${ filename }`);
+    }
     fInfo.link = join(this.config.root, fInfo.slug).replace(/index\.html/, '').replaceAll(sep, '/');
     fInfo.directory = dirname( fInfo.slug ).replaceAll(sep, '/').replace(/\/.*$/, '');
-    fInfo.date = fInfo.date ? new Date(fInfo.date) : this.#now;
+    fInfo.date = fInfo.date ? new Date(fInfo.date) : null;
     fInfo.priority = parseFloat(fInfo.priority) || 0.1;
     fInfo.isMD = fInfo.filename?.toLowerCase().endsWith('.md'),
     fInfo.isHTML = fInfo.slug.endsWith('.html'),
     fInfo.isXML = fInfo.slug.endsWith('.xml');
 
     // format tags
-    if (fInfo.tags) {
+    if (this.config.tagPages && fInfo.tags) {
 
       fInfo.tags = [
         ...new Set( (fInfo.tags).split(',')
@@ -355,21 +369,20 @@ export class Publican {
       ];
 
       // create tag information
-      if (this.config.tagPages) {
+      fInfo.tags = fInfo.tags.map(tag => {
 
-        fInfo.tags = fInfo.tags.map(tag => {
+        const
+          ref = normalize(tag),
+          slug = join(this.config.tagPages.root || '', ref).replaceAll(sep, '/') + '/index.html',
+          link = join(this.config.root, dirname(slug)).replaceAll(sep, '/') + '/';
 
-          const
-            ref = normalize(tag),
-            slug = join(this.config.tagPages.root || '', ref).replaceAll(sep, '/') + '/index.html',
-            link = join(this.config.root, dirname(slug)).replaceAll(sep, '/') + '/';
+        return { tag, ref, link, slug };
 
-          return { tag, ref, link, slug };
+      });
 
-        });
-
-      }
-
+    }
+    else {
+      fInfo.tags = null;
     }
 
     // publication
@@ -475,6 +488,10 @@ export class Publican {
       });
 
       // pass to TACS
+      if (tacs.all.has(data.slug)) {
+        throw new Error(`Same slug used in multiple places: ${ data.slug }`);
+      }
+
       tacs.all.set(data.slug, data);
 
     });
@@ -488,7 +505,7 @@ export class Publican {
 
         // sort by factor then date
         list.sort( (a, b) => {
-          let s = sD * (a[ sB ] - b[ sB ]);
+          let s = sD * (a[ sB ] == b[ sB ] ? 0 : a[ sB ] > b[ sB ] ? 1 : -1);
           if (!s) s = b.date - a.date;
           return s;
         } );
@@ -578,7 +595,7 @@ export class Publican {
         if (sPath.length) {
           navMap[p] = navMap[p] || { data: {}, children: {} };
           navMap = navMap[p];
-          navMap.data.title = navMap.data.title || p.replace(/\W/g, ' ').trim().replace(/\s+/g, ' ');
+          navMap.data.title = navMap.data.title || properCase( p.replace(/\W/g, ' ').trim().replace(/\s+/g, ' ') );
           navMap.data.priority = navMap.data.priority || 0.1;
           navMap.data.date = navMap.data.date || this.#now;
           if (sPath.length > 1) {
@@ -590,15 +607,38 @@ export class Publican {
 
     });
 
+
     // convert nav objects to arrays and sort
     tacs.nav = recurseNav(nav);
     function recurseNav(obj) {
-      const ret = Object.values(obj).sort( (a, b) => (b.data.priority - a.data.priority) || (b.data.date - a.data.date) );
+
+      const ret = Object.values(obj);
+
+      // use first child filename if directory does not exist
+      ret.forEach(d => {
+        if (d.data.filename) return;
+
+        const key = Object.keys(d.children);
+        if (key.length) {
+          d.data.filename = d.children[key[0]].data.filename;
+        }
+
+      });
+
+      // sort items by priority, date, then filename
+      ret.sort( (a, b) => (b.data.priority - a.data.priority) || (b.data.date - a.data.date) || (a.data.filename == b.data.filename ? 0 : a.data.filename > b.data.filename ? 1 : -1) );
+
+      // recurse child pages
       ret.forEach(n => {
         n.children = recurseNav( n.children );
       });
+
       return ret;
     }
+
+
+    // console.dir(tacs.nav, { depth: null, color: true });
+
 
     // render content in renderPriority order
     const

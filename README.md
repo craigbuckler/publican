@@ -99,6 +99,11 @@ node publican.config.js
 ```
 
 
+## Content files
+
+Publican ignores all content files with names starting with an underscore, e.g. `_draft.md`. This restriction does not apply to template files.
+
+
 ## Front matter
 
 You can add any front matter to content files but the following values control publication:
@@ -191,6 +196,8 @@ Publican configuration is set in a `publican.config` object with the following p
 |`.dir.build`|build directory (`./build/`)|
 |`.defaultHTMLTemplate`|default template for HTML files (`default.html`)|
 |`.root`|root path (`/`)|
+|`.ignoreContentFile`|ignore file regex (anything starting `_`)|
+|`.slugReplace`|slug replacer Map|
 |`.frontmatterDelimit`|front matter delimiter (`---`)|
 |`.indexFrequency`|default indexing frequency (`monthly`). Set `false` to prevent sitemap indexing|
 |`.markdownOptions.core`|[markdown-it core options](https://github.com/markdown-it/markdown-it?tab=readme-ov-file#init-with-presets-and-options) object|

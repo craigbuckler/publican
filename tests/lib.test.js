@@ -22,6 +22,7 @@ describe('lib.js/slugify function', () => {
     ['tag/post.html', 'tag/post/index.html'],
     ['tag/post.json', 'tag/post.json'],
     ['win\\dir\\index.md', 'win/dir/index.html'],
+    ['01_post/02_article.md', 'post/article/index.html'],
 
   ].forEach(set => {
 
@@ -31,7 +32,9 @@ describe('lib.js/slugify function', () => {
 
     it(
       `slugify ${ input.padEnd(pad) } => ${ output.padEnd(pad) }`,
-      () => assert.strictEqual(slugify( input ), output)
+      () => assert.strictEqual(slugify( input, new Map([
+        [/\d{2,}_/g, ''] // removes NN_ from slug
+      ]) ), output)
     );
 
   });

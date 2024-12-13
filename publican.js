@@ -422,6 +422,14 @@ export class Publican {
     // store in Map
     this.#contentMap.set(filename, fInfo);
 
+    // debug
+    if (fInfo.debug) {
+      const d = '-'.repeat(filename.length + 11);
+      console.log(`${ d }\n[Publican] ${ filename }\n${ d }`);
+      console.dir(fInfo, { depth: null, color: true });
+      console.log(d);
+    }
+
   }
 
 
@@ -609,6 +617,10 @@ export class Publican {
 
 
     // convert nav objects to arrays and sort
+    const
+      sB = this.config.dirPages.sortBy || 'priority',
+      sD = this.config.dirPages.sortDir || -1;
+
     tacs.nav = recurseNav(nav);
     function recurseNav(obj) {
 
@@ -625,8 +637,12 @@ export class Publican {
 
       });
 
-      // sort items by priority, date, then filename
-      ret.sort( (a, b) => (b.data.priority - a.data.priority) || (b.data.date - a.data.date) || (a.data.filename == b.data.filename ? 0 : a.data.filename > b.data.filename ? 1 : -1) );
+      // sort menu items
+      ret.sort( (a, b) => {
+        let s = sD * (a.data[ sB ] == b.data[ sB ] ? 0 : a.data[ sB ] > b.data[ sB ] ? 1 : -1);
+        if (!s) s = s = b.data.date - a.data.date;
+        return s;
+      });
 
       // recurse child pages
       ret.forEach(n => {
@@ -635,10 +651,6 @@ export class Publican {
 
       return ret;
     }
-
-
-    // console.dir(tacs.nav, { depth: null, color: true });
-
 
     // render content in renderPriority order
     const

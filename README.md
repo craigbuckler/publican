@@ -115,10 +115,11 @@ You can add any front matter to content files but the following values control p
 |`slug`|page slug (optional)|
 |`template`|HTML template filename (in template directory)|
 |`tags`|comma-delimited list of tags|
-|`date`|date of post (defaults to current date if not set)|
+|`date`|date of post|
 |`publish`|date of publication or `draft` determine whether post is published|
 |`priority`|post priority from 0 (least important) to 1 (most important)|
 |`index`|indexing frequency (daily, weekly, monthly, yearly) or `false` to not index|
+|`debug`|set `true` to output content properties|
 
 Note that front matter can contain `${ expressions }`.
 

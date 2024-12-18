@@ -1,5 +1,10 @@
-import { readdir, mkdir, readFile, writeFile, cp } from 'node:fs/promises';
-import { sep, join, dirname } from 'node:path';
+/*
+Publican HTML-first Static Site Generator
+https://www.npmjs.com/package/publican
+By Craig Buckler
+*/
+import { readdir, mkdir, rm, readFile, writeFile, cp } from 'node:fs/promises';
+import { sep, join, dirname, basename } from 'node:path';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
@@ -37,11 +42,14 @@ export class Publican {
       // default HTML template
       defaultHTMLTemplate: 'default.html',
 
-      // domain
-      domain: 'https://example.com',
-
       // root
       root: '/',
+
+      // ignore content filename regex (ignores files starting _)
+      ignoreContentFile: /^_.*$/,
+
+      // slug replacements
+      slugReplace: new Map(),
 
       // front matter marker
       frontmatterDelimit: '---',
@@ -76,7 +84,7 @@ export class Publican {
         size: 24,
         sortBy: 'priority',
         sortDir: -1,
-        template: 'list.html'
+        template: 'default.html'
       },
 
       // tag page options
@@ -85,7 +93,7 @@ export class Publican {
         size: 24,
         sortBy: 'date',
         sortDir: -1,
-        template: 'list.html',
+        template: 'default.html',
         menu: false,
         index: 'monthly'
       },
@@ -130,7 +138,23 @@ export class Publican {
       watch: false,
       watchDebounce: 300,
 
+      // output verbosity
+      logLevel: 2,
+
     };
+
+  }
+
+
+  // clean build directory
+  async clean() {
+
+    try {
+      await rm(this.config.dir.build, { recursive: true });
+    }
+    catch (e) {
+      if (this.config.logLevel > 1) console.warn(`\n[Publican] unable to delete ${ this.config.dir.build } build directory\n           ${ e }`);
+    }
 
   }
 
@@ -170,7 +194,7 @@ export class Publican {
     // watch for file changes
     if (this.config.watch) {
 
-      console.log('\nwatching for changes...');
+      if (this.config.logLevel > 0) console.info('\n[Publican] watching for changes...');
       this.#watcher();
 
     }
@@ -231,7 +255,7 @@ export class Publican {
       // process template changes
       await Promise.allSettled(
         tFiles.map(async f => {
-          const m = await this.#readFileContents(contentDir, f);
+          const m = await this.#readFileContents(templateDir, f);
           this.addTemplate(f, m.get(f));
         })
       );
@@ -256,16 +280,18 @@ export class Publican {
   // show performance metrics
   #showMetrics(written, metrics = []) {
 
-    if (written) {
+    if (written && this.config.logLevel) {
 
-      console.log('   files output:' + String(written).padStart(5, ' '));
+      console.info('[Publican] files output:' + String(written).padStart(5, ' '));
 
-      metrics.forEach(m => {
+      if (this.config.logLevel > 1) {
+        metrics.forEach(m => {
 
-        const p = Math.ceil( performance.measure(m, m + ':start', m + ':end').duration);
-        console.log(m.padStart(15,' ') + ':' + String(p).padStart(5, ' ') + 'ms');
+          const p = Math.ceil( performance.measure(m, m + ':start', m + ':end').duration);
+          console.info(m.padStart(23,' ') + ':' + String(p).padStart(5, ' ') + 'ms');
 
-      });
+        });
+      }
 
     }
 
@@ -303,6 +329,11 @@ export class Publican {
       throw new Error('Content filename cannot include parent directory .. reference.');
     }
 
+    // ignore files matching regex
+    if (this.config.ignoreContentFile && basename(filename).match(this.config.ignoreContentFile)) {
+      return;
+    }
+
     // delete from Map
     if (content === undefined) {
       this.#contentMap.delete(filename);
@@ -317,17 +348,20 @@ export class Publican {
       fInfo = parseFrontMatter( fData.fm );
 
     fInfo.filename = filename;
-    fInfo.slug = fInfo.slug || slugify(filename);
+    fInfo.slug = fInfo.slug || slugify(filename, this.config.slugReplace);
+    if (!fInfo.slug || typeof fInfo.slug !== 'string' || fInfo.slug.includes('..')) {
+      throw new Error(`Invalid slug "${ fInfo.slug }" for file: ${ filename }`);
+    }
     fInfo.link = join(this.config.root, fInfo.slug).replace(/index\.html/, '').replaceAll(sep, '/');
     fInfo.directory = dirname( fInfo.slug ).replaceAll(sep, '/').replace(/\/.*$/, '');
-    fInfo.date = fInfo.date ? new Date(fInfo.date) : this.#now;
+    fInfo.date = fInfo.date ? new Date(fInfo.date) : null;
     fInfo.priority = parseFloat(fInfo.priority) || 0.1;
     fInfo.isMD = fInfo.filename?.toLowerCase().endsWith('.md'),
     fInfo.isHTML = fInfo.slug.endsWith('.html'),
     fInfo.isXML = fInfo.slug.endsWith('.xml');
 
     // format tags
-    if (fInfo.tags) {
+    if (this.config.tagPages && fInfo.tags) {
 
       fInfo.tags = [
         ...new Set( (fInfo.tags).split(',')
@@ -335,21 +369,20 @@ export class Publican {
       ];
 
       // create tag information
-      if (this.config.tagPages) {
+      fInfo.tags = fInfo.tags.map(tag => {
 
-        fInfo.tags = fInfo.tags.map(tag => {
+        const
+          ref = normalize(tag),
+          slug = join(this.config.tagPages.root || '', ref).replaceAll(sep, '/') + '/index.html',
+          link = join(this.config.root, dirname(slug)).replaceAll(sep, '/') + '/';
 
-          const
-            ref = normalize(tag),
-            slug = join(this.config.tagPages.root || '', ref).replaceAll(sep, '/') + '/index.html',
-            link = join(this.config.root, dirname(slug)).replaceAll(sep, '/') + '/';
+        return { tag, ref, link, slug };
 
-          return { tag, ref, link, slug };
+      });
 
-        });
-
-      }
-
+    }
+    else {
+      fInfo.tags = null;
     }
 
     // publication
@@ -365,6 +398,18 @@ export class Publican {
     fInfo.index = fInfo.index || this.config.indexFrequency;
     if (fInfo.index.toLowerCase() === 'false') fInfo.index = false;
 
+    // word count
+    fInfo.wordCount = 0;
+    if (fInfo.index !== false) {
+      fInfo.wordCount = 1 + ((fInfo.title || '') + ' ' + fData.content)
+        .replace(/<.+?>/g, ' ')
+        .replace(/\W/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\S/g, '')
+        .length;
+    }
+
     // content - convert markdown to HTML if necessary
     fInfo.content = fInfo.isMD ? mdHTML(fData.content, this.config.markdownOptions) : fData.content;
 
@@ -376,6 +421,14 @@ export class Publican {
 
     // store in Map
     this.#contentMap.set(filename, fInfo);
+
+    // debug
+    if (fInfo.debug) {
+      const d = '-'.repeat(filename.length + 11);
+      console.log(`${ d }\n[Publican] ${ filename }\n${ d }`);
+      console.dir(fInfo, { depth: null, color: true });
+      console.log(d);
+    }
 
   }
 
@@ -404,10 +457,7 @@ export class Publican {
     performance.mark('render:start');
 
     // TACS global content
-    tacs.config = {
-      domain: this.config.domain,
-      root: this.config.root,
-    };
+    tacs.root = this.config.root;
     tacs.all = new Map();
     tacs.dir = new Map();
     tacs.tag = new Map();
@@ -446,6 +496,10 @@ export class Publican {
       });
 
       // pass to TACS
+      if (tacs.all.has(data.slug)) {
+        throw new Error(`Same slug used in multiple places: ${ data.slug }`);
+      }
+
       tacs.all.set(data.slug, data);
 
     });
@@ -459,7 +513,7 @@ export class Publican {
 
         // sort by factor then date
         list.sort( (a, b) => {
-          let s = sD * (a[ sB ] - b[ sB ]);
+          let s = sD * (a[ sB ] == b[ sB ] ? 0 : a[ sB ] > b[ sB ] ? 1 : -1);
           if (!s) s = b.date - a.date;
           return s;
         } );
@@ -469,8 +523,8 @@ export class Publican {
         // next and back articles
         for (let a = 0; a < list.length; a++) {
           const data = list[a];
-          data.postnext = a > 0 ? list[a - 1] : null;
-          data.postback = a < list.length - 1 ? list[a + 1] : null;
+          data.postback = a > 0 ? list[a - 1] : null;
+          data.postnext = a < list.length - 1 ? list[a + 1] : null;
         }
 
       });
@@ -532,7 +586,7 @@ export class Publican {
     const nav = {};
     tacs.all.forEach(data => {
 
-      if (data.menu === false || data.pagination?.pageCurrent) return;
+      if (data.pagination?.pageCurrent) return;
 
       const sPath = data.slug.split('/');
       if (sPath.length === 1) sPath.unshift('/');
@@ -549,7 +603,7 @@ export class Publican {
         if (sPath.length) {
           navMap[p] = navMap[p] || { data: {}, children: {} };
           navMap = navMap[p];
-          navMap.data.title = navMap.data.title || p.replace(/\W/g, ' ').trim().replace(/\s+/g, ' ');
+          navMap.data.title = navMap.data.title || properCase( p.replace(/\W/g, ' ').trim().replace(/\s+/g, ' ') );
           navMap.data.priority = navMap.data.priority || 0.1;
           navMap.data.date = navMap.data.date || this.#now;
           if (sPath.length > 1) {
@@ -561,13 +615,40 @@ export class Publican {
 
     });
 
+
     // convert nav objects to arrays and sort
+    const
+      sB = this.config.dirPages.sortBy || 'priority',
+      sD = this.config.dirPages.sortDir || -1;
+
     tacs.nav = recurseNav(nav);
     function recurseNav(obj) {
-      const ret = Object.values(obj).sort( (a, b) => (b.data.priority - a.data.priority) || (b.data.date - a.data.date) );
+
+      const ret = Object.values(obj);
+
+      // use first child filename if directory does not exist
+      ret.forEach(d => {
+        if (d.data.filename) return;
+
+        const key = Object.keys(d.children);
+        if (key.length) {
+          d.data.filename = d.children[key[0]].data.filename;
+        }
+
+      });
+
+      // sort menu items
+      ret.sort( (a, b) => {
+        let s = sD * (a.data[ sB ] == b.data[ sB ] ? 0 : a.data[ sB ] > b.data[ sB ] ? 1 : -1);
+        if (!s) s = s = b.data.date - a.data.date;
+        return s;
+      });
+
+      // recurse child pages
       ret.forEach(n => {
         n.children = recurseNav( n.children );
       });
+
       return ret;
     }
 
@@ -600,17 +681,25 @@ export class Publican {
       // custom replacements
       content = strReplacer( content, this.config?.replace );
 
+      // add !{ strings back
+      content = content.replace(/\$\{/g, '!{');
+
       // store rendered content (for feeds)
-      data.contentRendered = content.replace(/\$\{/g, '!{');
+      data.contentRendered = content;
 
       // render in template
       const useTemplate = data.template || (data.isHTML && this.config.defaultHTMLTemplate);
       if (useTemplate) {
 
+        const contentOrig = data.content;
+        data.content = content;
+
         content = strReplacer(
           templateParse( templateMap.get(useTemplate), data ),
           this.config?.replace
         );
+
+        data.content = contentOrig;
 
       }
 

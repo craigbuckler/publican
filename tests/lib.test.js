@@ -22,6 +22,7 @@ describe('lib.js/slugify function', () => {
     ['tag/post.html', 'tag/post/index.html'],
     ['tag/post.json', 'tag/post.json'],
     ['win\\dir\\index.md', 'win/dir/index.html'],
+    ['01_post/02_article.md', 'post/article/index.html'],
 
   ].forEach(set => {
 
@@ -31,7 +32,9 @@ describe('lib.js/slugify function', () => {
 
     it(
       `slugify ${ input.padEnd(pad) } => ${ output.padEnd(pad) }`,
-      () => assert.strictEqual(slugify( input ), output)
+      () => assert.strictEqual(slugify( input, new Map([
+        [/\d{2,}_/g, ''] // removes NN_ from slug
+      ]) ), output)
     );
 
   });
@@ -140,7 +143,7 @@ describe('lib.js/parseFrontMatter function', () => {
 });
 
 
-describe('lib.js/mdHTML and headingAnchor functions', () => {
+describe('lib.js/mdHTML and navHeading functions', () => {
 
   const
     markdownOptions = {
@@ -188,10 +191,10 @@ describe('lib.js/mdHTML and headingAnchor functions', () => {
     },
 
     {
-      md: '```html\n<h1>${ data.title }</h1>\n```\n\nInline `${ data.title }`{language=html}\n\n${ data.title }',
+      md: '## `HTML`\n\n```html\n<h1>${ data.title }</h1>\n```\n\nInline `${ data.title }`{language=html}\n\n${ data.title }\n\n${{ data.render }}\n\n!{ data.runtime }',
       out: {
-        content: '<pre class="language-html"><code class="language-html"><span class="line"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>h1</span><span class="token punctuation">></span></span>&#36;{ data.title }<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>h1</span><span class="token punctuation">></span></span></span>\n</code></pre>\n<p>Inline <code class="language-html">&#36;{ data.title }</code></p>\n<p>${ data.title }</p>',
-        navHeading: ''
+        content: '<h2 id="html" tabindex="-1"><code class="language-js"><span class="token constant">HTML</span></code> <a href="#html" class="headlink">#</a></h2>\n<pre class="language-html"><code class="language-html"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>h1</span><span class="token punctuation">></span></span>&#36;{ data.title }<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>h1</span><span class="token punctuation">></span></span>\n</code></pre>\n<p>Inline <code class="language-html">&#36;{ data.title }</code></p>\n<p>${ data.title }</p>\n<p>${ data.render }</p>\n<p>!{ data.runtime }</p>',
+        navHeading: '<nav class="contents">\n<ol><li>\n<a href="#html" class="head-h2"><code class="language-js"><span class="token constant">HTML</span></code></a>\n</li></ol>\n</nav>'
       }
     },
 

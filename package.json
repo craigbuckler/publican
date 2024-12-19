@@ -1,6 +1,6 @@
 {
   "name": "publican",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Simple and fast HTML-first static site generator",
   "type": "module",
   "main": "publican.js",

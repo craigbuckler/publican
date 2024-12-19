@@ -209,10 +209,12 @@ Publican configuration is set in a `publican.config` object with the following p
 |`.minify`|[HTML minification options](https://github.com/kangax/html-minifier?tab=readme-ov-file#options-quick-reference) object|
 |`.passThrough`|file copy Set|
 |`.replace`|string replacer Map|
-|`.processContent`|function hook Set for content files (`slug`, `object`)|
-|`.processTemplate`|function hook Set for template files (`slug`, `string`) - returns string|
-|`.processPreRender`|function hook Set prior to rendering (`slug`, `object`)|
-|`.processPostRender`|function hook Set post rendering (`slug`, `string`) - returns string|
+|`.processContent`|function hook Set for content files (`filename`, `object`)|
+|`.processTemplate`|function hook Set for template files (`filename`, `string`) - returns string|
+|`.processRenderStart`|function hook Set called once prior to rendering ()|
+|`.processPreRender`|function hook Set prior to rendering post (`slug`, `object`)|
+|`.processPostRender`|function hook Set after rendering post (`slug`, `string`) - returns string|
+|`.processRenderComplete`|function hook Set called once after rendering (changed file list `[{slug,content},...]`)|
 |`.watch`|enable watch mode (`false`)|
 |`.watchDebounce`|watch debounce in milliseconds (`300`)|
 |`.logLevel`|log verbosity, `0` to `2` (`2`)|
@@ -359,7 +361,7 @@ Note the template string cannot be delimited with `` ` `` backticks if they cont
 
 ### Processing function hooks
 
-Plugins or configuration code can define custom functions to alter data at build time.
+Plugins or configuration code can define custom functions to add, alter, or remove data at build time.
 
 To process content data when it's initially loaded, add a `.processContent` function. The function is passed the file name and `data` object which it can manipulate (return values are ignored). The following example prepends "POST:" to every title:
 
@@ -377,17 +379,28 @@ publican.config.processTemplate.add(
 );
 ```
 
-To process content data before it's rendered, add a `.processPreRender` function. The function is passed the `data` object which it can manipulate (return values are ignored). The following example sets a `renderTime` value to the current datetime on all output HTML files:
+To process any data before rendering starts, add a `.processRenderStart` function. It is called once and not passed anything, but can access and modify global `tacs` properties (return values are ignored). The following example creates a new `tacs.tagScore` Map which gives the post count for each tag reference:
+
+```js
+publican.config.processRenderStart.add(
+  () => {
+    tacs.tagScore = new Map();
+    tacs.tagList.forEach(t => tacs.tagScore.set(t.ref, t.count));
+  }
+);
+```
+
+To process each post before it's rendered, add a `.processPreRender` function. The function is passed the post `data` object which it can manipulate (return values are ignored). The following example sets a `renderTime` value to the current datetime on all output HTML files:
 
 ```js
 publican.config.processPreRender.add(
-  (filename, data) => {
+  (data) => {
     if (data.isHTML) data.renderTime = new Date();
   }
 );
 ```
 
-To process the fully rendered content prior to minification, add a `.processPostRender` function. The function is passed the data object and the final output string which it can manipulate and return. The following example inserts a meta tag into HTML content:
+To process the fully rendered content of each post (prior to minification), add a `.processPostRender` function. The function is passed the post `data` object and the final output string which it can manipulate and return. The following example inserts a meta tag into HTML content:
 
 ```js
 publican.config.processPostRender.add(
@@ -395,6 +408,17 @@ publican.config.processPostRender.add(
     '</head>',
     '<meta name="generator" content="Publican" />\n</head>'
   )
+);
+```
+
+To process any data after rendering is complete and at least one file has to be written, add a `.processRenderComplete` function. It is called once and passed an array of `{slug, content}` objects which can be modified before they are saved to disk. The following example adds a comment with the slug name to the bottom of all HTML files:
+
+```js
+publican.config.processRenderComplete.add(
+  (write) => {
+    console.log(`Writing ${ write.length } files`);
+    write.forEach(w => { if (w.slug.endsWith('.html')) w.content += `<!-- ${ w.slug } -->`; });
+  }
 );
 ```
 

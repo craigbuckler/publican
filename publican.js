@@ -116,17 +116,23 @@ export class Publican {
         useShortDoctype: true
       },
 
-      // event functions to process incoming content files (slug, object)
+      // event functions to process incoming content files (filename, post data object)
       processContent: new Set(),
 
-      // event functions to process incoming template files (slug, string)
+      // event functions to process incoming template files (filename, string)
       processTemplate: new Set(),
 
-      // event content pre-render functions (data object)
+      // event functions called once before rendering ()
+      processRenderStart: new Set(),
+
+      // event functions to process content before rendering (post data object)
       processPreRender: new Set(),
 
-      // event functions to process rendered content (data object, string)
+      // event functions to process content after rendering (post data object, string output)
       processPostRender: new Set(),
+
+      // event functions called once after rendering ([{slug,content}, {slug,content}, ...])
+      processRenderComplete: new Set(),
 
       // directory pass-through { from (relative to project), to (relative to dir.build) }
       passThrough: new Set(),
@@ -537,7 +543,7 @@ export class Publican {
         this.config.dirPages.template
       ).forEach((fInfo, slug) => {
 
-        fInfo.title = properCase(fInfo.directory);
+        fInfo.title = tacs.all.get(fInfo.directory + '/index.html')?.title || properCase(fInfo.directory);
         tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
 
       });
@@ -658,6 +664,9 @@ export class Publican {
       navHeadingTag = '</' + (this.config?.headingAnchor?.tag || 'nav-heading') + '>',
       allByPriority = Array.from(tacs.all, ([, data]) => data).sort((a, b) => b.renderPriority - a.renderPriority);
 
+    // custom global pre-render
+    this.config.processRenderStart.forEach(fn => fn());
+
     allByPriority.forEach(data => {
 
       // get slug
@@ -725,6 +734,9 @@ export class Publican {
       }
 
     });
+
+    // custom global render complete processing
+    if (write.length) this.config.processRenderComplete.forEach(fn => fn(write));
 
     performance.mark('render:end');
     performance.mark('writeFiles:start');

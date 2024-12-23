@@ -183,7 +183,7 @@ The following values are available in all pages:
 |`tacs.dir`|Map object of all posts in a root directory. Returns an array of posts.|
 |`tacs.tag`|Map object of all tags. Returns an array of posts.|
 |`tacs.tagList`|array of tag objects: { tag, ref (normalized tag), link, slug, count }|
-|`tacs.nav`|nested array of navigation item objects: { data: {}, children [ { data,children },... ] }|
+|`tacs.nav`|nested array of navigation item objects: { data: {}, children \[ { data,children },... \] }|
 
 
 ## Publican configuration
@@ -204,8 +204,8 @@ Publican configuration is set in a `publican.config` object with the following p
 |`.markdownOptions.core`|[markdown-it core options](https://github.com/markdown-it/markdown-it?tab=readme-ov-file#init-with-presets-and-options) object|
 |`.markdownOptions.prism`|[markdown-it-prism syntax highlighting options](https://github.com/jGleitz/markdown-it-prism?tab=readme-ov-file#options) object|
 |`.headingAnchor`|heading anchor and contents block options object|
-|`.dirPages`|directory pages options object|
-|`.tagPages`|tag page index options object|
+|`.dirPages`|directory pages options object {`size`, `sortBy`, `sortOrder`, `template`, `dir`}|
+|`.tagPages`|tag page index options object {`root`, `size`, `sortBy`, `sortOrder`, `template`, `menu`, `index`}|
 |`.minify`|[HTML minification options](https://github.com/kangax/html-minifier?tab=readme-ov-file#options-quick-reference) object|
 |`.passThrough`|file copy Set|
 |`.replace`|string replacer Map|

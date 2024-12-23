@@ -39,9 +39,6 @@ export class Publican {
         build:    './build/'
       },
 
-      // default HTML template
-      defaultHTMLTemplate: 'default.html',
-
       // root
       root: '/',
 
@@ -56,6 +53,9 @@ export class Publican {
 
       // default indexing frequency
       indexFrequency: 'monthly',
+
+      // default HTML template
+      defaultHTMLTemplate: 'default.html',
 
       // markdown options
       markdownOptions: {
@@ -83,8 +83,9 @@ export class Publican {
       dirPages: {
         size: 24,
         sortBy: 'priority',
-        sortDir: -1,
-        template: 'default.html'
+        sortOrder: -1,
+        template: 'default.html',
+        dir: {} // custom directory sort
       },
 
       // tag page options
@@ -92,7 +93,7 @@ export class Publican {
         root: 'tag',
         size: 24,
         sortBy: 'date',
-        sortDir: -1,
+        sortOrder: -1,
         template: 'default.html',
         menu: false,
         index: 'monthly'
@@ -513,9 +514,11 @@ export class Publican {
     // directory pages
     if (this.config.dirPages) {
 
-      const sB = this.config.dirPages.sortBy || 'priority', sD = this.config.dirPages.sortDir || -1;
-
       tacs.dir.forEach((list, dir) => {
+
+        const
+          sB = this.config.dirPages.dir?.[dir]?.sortBy || this.config.dirPages.sortBy || 'priority',
+          sD = this.config.dirPages.dir?.[dir]?.sortOrder || this.config.dirPages.sortOrder || -1;
 
         // sort by factor then date
         list.sort( (a, b) => {
@@ -553,7 +556,7 @@ export class Publican {
     // tag pages
     if (this.config.tagPages) {
 
-      const sB = this.config.tagPages.sortBy || 'date', sD = this.config.tagPages.sortDir || -1;
+      const sB = this.config.tagPages.sortBy || 'date', sD = this.config.tagPages.sortOrder || -1;
 
       // sort pages
       tacs.tag.forEach((list, ref) => {
@@ -623,12 +626,10 @@ export class Publican {
 
 
     // convert nav objects to arrays and sort
-    const
-      sB = this.config.dirPages.sortBy || 'priority',
-      sD = this.config.dirPages.sortDir || -1;
+    const dP = this.config.dirPages;
 
     tacs.nav = recurseNav(nav);
-    function recurseNav(obj) {
+    function recurseNav(obj, dir) {
 
       const ret = Object.values(obj);
 
@@ -644,6 +645,10 @@ export class Publican {
       });
 
       // sort menu items
+      const
+        sB = (dir && dP.dir?.[dir]?.sortBy) || dP?.sortBy || 'priority',
+        sD = (dir && dP.dir?.[dir]?.sortOrder) || dP.sortOrder || -1;
+
       ret.sort( (a, b) => {
         let s = sD * (a.data[ sB ] == b.data[ sB ] ? 0 : a.data[ sB ] > b.data[ sB ] ? 1 : -1);
         if (!s) s = s = b.data.date - a.data.date;
@@ -652,7 +657,7 @@ export class Publican {
 
       // recurse child pages
       ret.forEach(n => {
-        n.children = recurseNav( n.children );
+        n.children = recurseNav( n.children, n.data.directory );
       });
 
       return ret;

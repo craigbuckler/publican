@@ -247,7 +247,7 @@ publican.config.passThrough.add({ from: './src/css/', to: 'css/' });
 Built files can have strings replaced:
 
 ```js
-publican.config.passThrough.set(<search>, <replace>);
+publican.config.replace.set(<search>, <replace>);
 ```
 
 where:
@@ -259,10 +259,10 @@ Examples:
 
 ```js
 // replace __YEAR__ with the current year
-publican.config.passThrough.set( '__YEAR__', (new Date()).getUTCFullYear() );
+publican.config.replace.set( '__YEAR__', (new Date()).getUTCFullYear() );
 
 // replace text in <p class="bold"> with <p><strong>
-publican.config.passThrough.set( /<p class="bold">(.*?)<\/p>/ig, '<p><strong>$1</strong></p>);
+publican.config.replace.set( /<p class="bold">(.*?)<\/p>/ig, '<p><strong>$1</strong></p>);
 ```
 
 

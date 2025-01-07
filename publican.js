@@ -333,7 +333,7 @@ export class Publican {
 
     // path error - cannot navigate to parent using '..'
     if (filename.includes('..')) {
-      throw new Error('Content filename cannot include parent directory .. reference.');
+      throw new Error('[Publican] content filename cannot include parent directory .. reference.');
     }
 
     // ignore files matching regex
@@ -357,7 +357,7 @@ export class Publican {
     fInfo.filename = filename;
     fInfo.slug = fInfo.slug || slugify(filename, this.config.slugReplace);
     if (!fInfo.slug || typeof fInfo.slug !== 'string' || fInfo.slug.includes('..')) {
-      throw new Error(`Invalid slug "${ fInfo.slug }" for file: ${ filename }`);
+      throw new Error(`[Publican] invalid slug "${ fInfo.slug }" for file: ${ filename }`);
     }
     fInfo.link = join(this.config.root, fInfo.slug).replace(/index\.html/, '').replaceAll(sep, '/');
     fInfo.directory = dirname( fInfo.slug ).replaceAll(sep, '/').replace(/\/.*$/, '');
@@ -423,8 +423,8 @@ export class Publican {
     // ensure pages using data.contentRendered are processed last
     fInfo.renderPriority = fInfo.content.includes('.contentRendered') ? -2 : 0;
 
-    // custom processing
-    this.config.processContent.forEach(fn => fn(filename, fInfo));
+    // custom processing: processContent hook
+    this.config.processContent.forEach(fn => fn(fInfo, filename));
 
     // store in Map
     this.#contentMap.set(filename, fInfo);
@@ -449,8 +449,8 @@ export class Publican {
       return;
     }
 
-    // custom processing
-    this.config.processTemplate.forEach(fn => { content = fn(filename, content); });
+    // custom processing: processTemplate hook
+    this.config.processTemplate.forEach(fn => { content = fn(content, filename); });
 
     // store in Map
     templateMap.set(filename, content);
@@ -504,7 +504,7 @@ export class Publican {
 
       // pass to TACS
       if (tacs.all.has(data.slug)) {
-        throw new Error(`Same slug used in multiple places: ${ data.slug }`);
+        throw new Error(`[Publican] same slug used in multiple places: ${ data.slug }`);
       }
 
       tacs.all.set(data.slug, data);
@@ -669,16 +669,13 @@ export class Publican {
       navHeadingTag = '</' + (this.config?.headingAnchor?.tag || 'nav-heading') + '>',
       allByPriority = Array.from(tacs.all, ([, data]) => data).sort((a, b) => b.renderPriority - a.renderPriority);
 
-    // custom global pre-render
-    this.config.processRenderStart.forEach(fn => fn());
+    // custom processing: processRenderStart hook
+    this.config.processRenderStart.forEach(fn => fn(tacs));
 
     allByPriority.forEach(data => {
 
-      // get slug
-      const slug = data.slug;
-
-      // custom pre-render processing
-      this.config.processPreRender.forEach(fn => fn(data));
+      // custom processing: processPreRender hook
+      this.config.processPreRender.forEach(fn => fn(data, tacs));
 
       // render content only
       let
@@ -722,15 +719,15 @@ export class Publican {
         content = content.replaceAll(navHeadingTag, contentNav + navHeadingTag);
       }
 
-      // custom post-render processing
-      this.config.processPostRender.forEach(fn => { content = fn(data, content); });
+      // custom processing: processPostRender hook
+      this.config.processPostRender.forEach(fn => { content = fn(content, data, tacs); });
 
       // minify
       if (data.isXML) content = minifySimple(content);
       if (data.isHTML && this.config?.minify?.enabled) content = minifyFull(content, this.config.minify);
 
       // hash check and flag for file write
-      const hash = strHash(content);
+      const slug = data.slug, hash = strHash(content);
       if (this.#writeHash.get(slug) !== hash) {
 
         this.#writeHash.set(slug, hash);

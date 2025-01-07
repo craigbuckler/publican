@@ -361,36 +361,36 @@ Note the template string cannot be delimited with `` ` `` backticks if they cont
 
 ### Processing function hooks
 
-Plugins or configuration code can define custom functions to add, alter, or remove data at build time.
+Plugins or configuration code can define custom synchronous functions to add, alter, or remove data at build time. *(Asynchronous functions which return a Promise are not supported.)*
 
-To process content data when it's initially loaded, add a `.processContent` function. The function is passed the file name and `data` object which it can manipulate (return values are ignored). The following example prepends "POST:" to every title:
+To process content data when it's initially loaded, add a `.processContent` function (only synchronous functions are permitted). The function is passed the `data` object and filename. Return values are ignored, but `data` properties can be manipulated. The following example prepends "POST:" to every title:
 
 ```js
 publican.config.processContent.add(
-  (filename, data) => data.title = 'POST: ' + data.title
+  (data, filename) => data.title = 'POST: ' + data.title
 );
 ```
 
-To process a template string when it's initially loaded, add a `.processTemplate` function. The function is passed the file name and the template string which it can manipulate and return. The following example replaces all instances of `__COPYRIGHT__` with a `©` symbol:
+To process a template string when it's initially loaded, add a `.processTemplate` function. The function is passed the template string and the filename. Return the (changed) template string. The following example adds the filename as an HTML comment to the template:
 
 ```js
 publican.config.processTemplate.add(
-  (filename, template) => template.replaceAll('__COPYRIGHT__', '&copy;')
+  (template, filename) => `\n<!-- ${ filename } -->\n${ template }`
 );
 ```
 
-To process any data before rendering starts, add a `.processRenderStart` function. It is called once and not passed anything, but can access and modify global `tacs` properties (return values are ignored). The following example creates a new `tacs.tagScore` Map which gives the post count for each tag reference:
+To process any data before rendering starts, add a `.processRenderStart` function. It is called once and passed the global `tacs` object so it can manipulate properties. Return values are ignored. The following example creates a new `tacs.tagScore` Map which gives the post count for each tag reference:
 
 ```js
 publican.config.processRenderStart.add(
-  () => {
+  tacs => {
     tacs.tagScore = new Map();
     tacs.tagList.forEach(t => tacs.tagScore.set(t.ref, t.count));
   }
 );
 ```
 
-To process each post before it's rendered, add a `.processPreRender` function. The function is passed the post `data` object which it can manipulate (return values are ignored). The following example sets a `renderTime` value to the current datetime on all output HTML files:
+To process each post before it's rendered, add a `.processPreRender` function. The function is passed the post `data` object and the `tacs` global data object so it can manipulate properties. Return values are ignored. The following example sets a `renderTime` value to the current datetime on all output HTML files:
 
 ```js
 publican.config.processPreRender.add(
@@ -400,14 +400,16 @@ publican.config.processPreRender.add(
 );
 ```
 
-To process the fully rendered content of each post (prior to minification), add a `.processPostRender` function. The function is passed the post `data` object and the final output string which it can manipulate and return. The following example inserts a meta tag into HTML content:
+To process the fully rendered content of each post (prior to minification and saving), add a `.processPostRender` function. The function is passed the final output string, the post `data` object, and the `tacs` global object. Return the (changed) output string. The following example inserts a meta tag into HTML content:
 
 ```js
 publican.config.processPostRender.add(
-  (data, output) => output.replace(
-    '</head>',
-    '<meta name="generator" content="Publican" />\n</head>'
-  )
+  (output, data) => {
+    if (data.isHTML) {
+      output = output.replace('</head>', '<meta name="generator" content="Publican.dev" />\n</head>');
+    }
+    return output;
+  }
 );
 ```
 

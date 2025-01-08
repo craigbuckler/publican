@@ -728,6 +728,12 @@ export class Publican {
 
       // hash check and flag for file write
       const slug = data.slug, hash = strHash(content);
+
+      // slug error - cannot navigate to parent using '..'
+      if (slug.includes('..')) {
+        throw new Error(`[Publican] slug cannot include parent directory .. reference: ${ slug }`);
+      }
+
       if (this.#writeHash.get(slug) !== hash) {
 
         this.#writeHash.set(slug, hash);
@@ -736,9 +742,6 @@ export class Publican {
       }
 
     });
-
-    // custom global render complete processing
-    if (write.length) this.config.processRenderComplete.forEach(fn => fn(write));
 
     performance.mark('render:end');
     performance.mark('writeFiles:start');
@@ -803,6 +806,7 @@ export class Publican {
           link: join(this.config.root, slug).replaceAll(sep, '/').replace(/index\.html/, ''),
           directory: dirname( slug ).replaceAll(sep, '/').replace(/\/.*$/, ''),
           date: this.#now,
+          isHTML: true,
           priority: 0.1,
           renderPriority: -1,
           template: template,

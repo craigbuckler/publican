@@ -413,17 +413,6 @@ publican.config.processPostRender.add(
 );
 ```
 
-To process any data after rendering is complete and at least one file has to be written, add a `.processRenderComplete` function. It is called once and passed an array of `{slug, content}` objects which can be modified before they are saved to disk. The following example adds a comment with the slug name to the bottom of all HTML files:
-
-```js
-publican.config.processRenderComplete.add(
-  (write) => {
-    console.log(`Writing ${ write.length } files`);
-    write.forEach(w => { if (w.slug.endsWith('.html')) w.content += `<!-- ${ w.slug } -->`; });
-  }
-);
-```
-
 
 ## Notes
 

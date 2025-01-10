@@ -39,9 +39,6 @@ export class Publican {
         build:    './build/'
       },
 
-      // default HTML template
-      defaultHTMLTemplate: 'default.html',
-
       // root
       root: '/',
 
@@ -56,6 +53,9 @@ export class Publican {
 
       // default indexing frequency
       indexFrequency: 'monthly',
+
+      // default HTML template
+      defaultHTMLTemplate: 'default.html',
 
       // markdown options
       markdownOptions: {
@@ -83,8 +83,9 @@ export class Publican {
       dirPages: {
         size: 24,
         sortBy: 'priority',
-        sortDir: -1,
-        template: 'default.html'
+        sortOrder: -1,
+        template: 'default.html',
+        dir: {} // custom directory sort
       },
 
       // tag page options
@@ -92,7 +93,7 @@ export class Publican {
         root: 'tag',
         size: 24,
         sortBy: 'date',
-        sortDir: -1,
+        sortOrder: -1,
         template: 'default.html',
         menu: false,
         index: 'monthly'
@@ -116,17 +117,23 @@ export class Publican {
         useShortDoctype: true
       },
 
-      // event functions to process incoming content files (slug, object)
+      // event functions to process incoming content files (filename, post data object)
       processContent: new Set(),
 
-      // event functions to process incoming template files (slug, string)
+      // event functions to process incoming template files (filename, string)
       processTemplate: new Set(),
 
-      // event content pre-render functions (data object)
+      // event functions called once before rendering ()
+      processRenderStart: new Set(),
+
+      // event functions to process content before rendering (post data object)
       processPreRender: new Set(),
 
-      // event functions to process rendered content (data object, string)
+      // event functions to process content after rendering (post data object, string output)
       processPostRender: new Set(),
+
+      // event functions called once after rendering ([{slug,content}, {slug,content}, ...])
+      processRenderComplete: new Set(),
 
       // directory pass-through { from (relative to project), to (relative to dir.build) }
       passThrough: new Set(),
@@ -326,7 +333,7 @@ export class Publican {
 
     // path error - cannot navigate to parent using '..'
     if (filename.includes('..')) {
-      throw new Error('Content filename cannot include parent directory .. reference.');
+      throw new Error('[Publican] content filename cannot include parent directory .. reference.');
     }
 
     // ignore files matching regex
@@ -350,7 +357,7 @@ export class Publican {
     fInfo.filename = filename;
     fInfo.slug = fInfo.slug || slugify(filename, this.config.slugReplace);
     if (!fInfo.slug || typeof fInfo.slug !== 'string' || fInfo.slug.includes('..')) {
-      throw new Error(`Invalid slug "${ fInfo.slug }" for file: ${ filename }`);
+      throw new Error(`[Publican] invalid slug "${ fInfo.slug }" for file: ${ filename }`);
     }
     fInfo.link = join(this.config.root, fInfo.slug).replace(/index\.html/, '').replaceAll(sep, '/');
     fInfo.directory = dirname( fInfo.slug ).replaceAll(sep, '/').replace(/\/.*$/, '');
@@ -416,8 +423,8 @@ export class Publican {
     // ensure pages using data.contentRendered are processed last
     fInfo.renderPriority = fInfo.content.includes('.contentRendered') ? -2 : 0;
 
-    // custom processing
-    this.config.processContent.forEach(fn => fn(filename, fInfo));
+    // custom processing: processContent hook
+    this.config.processContent.forEach(fn => fn(fInfo, filename));
 
     // store in Map
     this.#contentMap.set(filename, fInfo);
@@ -442,8 +449,8 @@ export class Publican {
       return;
     }
 
-    // custom processing
-    this.config.processTemplate.forEach(fn => { content = fn(filename, content); });
+    // custom processing: processTemplate hook
+    this.config.processTemplate.forEach(fn => { content = fn(content, filename); });
 
     // store in Map
     templateMap.set(filename, content);
@@ -497,7 +504,7 @@ export class Publican {
 
       // pass to TACS
       if (tacs.all.has(data.slug)) {
-        throw new Error(`Same slug used in multiple places: ${ data.slug }`);
+        throw new Error(`[Publican] same slug used in multiple places: ${ data.slug }`);
       }
 
       tacs.all.set(data.slug, data);
@@ -507,9 +514,11 @@ export class Publican {
     // directory pages
     if (this.config.dirPages) {
 
-      const sB = this.config.dirPages.sortBy || 'priority', sD = this.config.dirPages.sortDir || -1;
-
       tacs.dir.forEach((list, dir) => {
+
+        const
+          sB = this.config.dirPages.dir?.[dir]?.sortBy || this.config.dirPages.sortBy || 'priority',
+          sD = this.config.dirPages.dir?.[dir]?.sortOrder || this.config.dirPages.sortOrder || -1;
 
         // sort by factor then date
         list.sort( (a, b) => {
@@ -537,7 +546,7 @@ export class Publican {
         this.config.dirPages.template
       ).forEach((fInfo, slug) => {
 
-        fInfo.title = properCase(fInfo.directory);
+        fInfo.title = tacs.all.get(fInfo.directory + '/index.html')?.title || properCase(fInfo.directory);
         tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
 
       });
@@ -547,7 +556,7 @@ export class Publican {
     // tag pages
     if (this.config.tagPages) {
 
-      const sB = this.config.tagPages.sortBy || 'date', sD = this.config.tagPages.sortDir || -1;
+      const sB = this.config.tagPages.sortBy || 'date', sD = this.config.tagPages.sortOrder || -1;
 
       // sort pages
       tacs.tag.forEach((list, ref) => {
@@ -617,12 +626,10 @@ export class Publican {
 
 
     // convert nav objects to arrays and sort
-    const
-      sB = this.config.dirPages.sortBy || 'priority',
-      sD = this.config.dirPages.sortDir || -1;
+    const dP = this.config.dirPages;
 
     tacs.nav = recurseNav(nav);
-    function recurseNav(obj) {
+    function recurseNav(obj, dir) {
 
       const ret = Object.values(obj);
 
@@ -638,6 +645,10 @@ export class Publican {
       });
 
       // sort menu items
+      const
+        sB = (dir && dP.dir?.[dir]?.sortBy) || dP?.sortBy || 'priority',
+        sD = (dir && dP.dir?.[dir]?.sortOrder) || dP.sortOrder || -1;
+
       ret.sort( (a, b) => {
         let s = sD * (a.data[ sB ] == b.data[ sB ] ? 0 : a.data[ sB ] > b.data[ sB ] ? 1 : -1);
         if (!s) s = s = b.data.date - a.data.date;
@@ -646,7 +657,7 @@ export class Publican {
 
       // recurse child pages
       ret.forEach(n => {
-        n.children = recurseNav( n.children );
+        n.children = recurseNav( n.children, n.data.directory );
       });
 
       return ret;
@@ -658,13 +669,13 @@ export class Publican {
       navHeadingTag = '</' + (this.config?.headingAnchor?.tag || 'nav-heading') + '>',
       allByPriority = Array.from(tacs.all, ([, data]) => data).sort((a, b) => b.renderPriority - a.renderPriority);
 
+    // custom processing: processRenderStart hook
+    this.config.processRenderStart.forEach(fn => fn(tacs));
+
     allByPriority.forEach(data => {
 
-      // get slug
-      const slug = data.slug;
-
-      // custom pre-render processing
-      this.config.processPreRender.forEach(fn => fn(data));
+      // custom processing: processPreRender hook
+      this.config.processPreRender.forEach(fn => fn(data, tacs));
 
       // render content only
       let
@@ -708,15 +719,21 @@ export class Publican {
         content = content.replaceAll(navHeadingTag, contentNav + navHeadingTag);
       }
 
-      // custom post-render processing
-      this.config.processPostRender.forEach(fn => { content = fn(data, content); });
+      // custom processing: processPostRender hook
+      this.config.processPostRender.forEach(fn => { content = fn(content, data, tacs); });
 
       // minify
       if (data.isXML) content = minifySimple(content);
       if (data.isHTML && this.config?.minify?.enabled) content = minifyFull(content, this.config.minify);
 
       // hash check and flag for file write
-      const hash = strHash(content);
+      const slug = data.slug, hash = strHash(content);
+
+      // slug error - cannot navigate to parent using '..'
+      if (slug.includes('..')) {
+        throw new Error(`[Publican] slug cannot include parent directory .. reference: ${ slug }`);
+      }
+
       if (this.#writeHash.get(slug) !== hash) {
 
         this.#writeHash.set(slug, hash);
@@ -789,6 +806,7 @@ export class Publican {
           link: join(this.config.root, slug).replaceAll(sep, '/').replace(/index\.html/, ''),
           directory: dirname( slug ).replaceAll(sep, '/').replace(/\/.*$/, ''),
           date: this.#now,
+          isHTML: true,
           priority: 0.1,
           renderPriority: -1,
           template: template,

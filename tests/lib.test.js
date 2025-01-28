@@ -3,6 +3,7 @@ import { slugify, properCase, normalize, extractFmContent, parseFrontMatter, mdH
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 
+
 describe('lib.js/slugify function', () => {
 
   const pad = 20;
@@ -118,7 +119,6 @@ describe('lib.js/extractFmContent function', () => {
 });
 
 
-
 describe('lib.js/parseFrontMatter function', () => {
 
   [
@@ -159,8 +159,10 @@ describe('lib.js/mdHTML and navHeading functions', () => {
       }
     },
     headingAnchorOptions = {
+      nolink: 'nolink',
       linkContent: '#',
       linkClass: 'headlink',
+      nomenu: 'nomenu',
       navClass: 'contents'
     };
 
@@ -198,6 +200,29 @@ describe('lib.js/mdHTML and navHeading functions', () => {
       }
     },
 
+    {
+      md: '<h1>Main title</h1>\n<h2 id="h2a">Heading 2a</h2>\n<h3 class="nolink">Heading 3a</h3>\n<h3 class="nolink nomenu">Heading 3b</h3>\n<h2>Heading 2b</h2>\n<h3 id="h3b" tabindex="10" class="link">Heading 3b</h3>',
+      out: {
+        content: '<h1>Main title</h1>\n<h2 id="h2a" tabindex="-1">Heading 2a <a href="#h2a" class="headlink">#</a></h2>\n<h3 class="nolink" id="heading-3a" tabindex="-1">Heading 3a</h3>\n<h3 class="nolink nomenu">Heading 3b</h3>\n<h2 id="heading-2b" tabindex="-1">Heading 2b <a href="#heading-2b" class="headlink">#</a></h2>\n<h3 id="h3b" tabindex="10" class="link">Heading 3b <a href="#h3b" class="headlink">#</a></h3>',
+        navHeading: '<nav class="contents">\n<ol><li>\n<a href="#h2a" class="head-h2">Heading 2a</a>\n<ol><li>\n<a href="#heading-3a" class="head-h3">Heading 3a</a></li>\n</ol>\n</li>\n<li><a href="#heading-2b" class="head-h2">Heading 2b</a>\n<ol><li>\n<a href="#h3b" class="head-h3">Heading 3b</a>\n</li></ol></li></ol>\n</nav>'
+      }
+    },
+
+    {
+      md: '<h2>Heading 2a</h2>\n<h3 class="nolink nomenu">Heading 3a</h3>\n<h3 class="nomenu">Heading 3b</h3>\n<h3 class="nolink">Heading 3c</h3>\n<h2 class="nomenu">Heading 2b</h2>\n<h3>Heading 3d</h3>\n<h3>Heading 3e</h3>\n<h3 class="nomenu">Heading 3f</h3>',
+      out: {
+        content: '<h2 id="heading-2a" tabindex="-1">Heading 2a <a href="#heading-2a" class="headlink">#</a></h2>\n<h3 class="nolink nomenu">Heading 3a</h3>\n<h3 class="nomenu" id="heading-3b" tabindex="-1">Heading 3b <a href="#heading-3b" class="headlink">#</a></h3>\n<h3 class="nolink" id="heading-3c" tabindex="-1">Heading 3c</h3>\n<h2 class="nomenu" id="heading-2b" tabindex="-1">Heading 2b <a href="#heading-2b" class="headlink">#</a></h2>\n<h3 id="heading-3d" tabindex="-1">Heading 3d <a href="#heading-3d" class="headlink">#</a></h3>\n<h3 id="heading-3e" tabindex="-1">Heading 3e <a href="#heading-3e" class="headlink">#</a></h3>\n<h3 class="nomenu" id="heading-3f" tabindex="-1">Heading 3f <a href="#heading-3f" class="headlink">#</a></h3>',
+        navHeading: '<nav class="contents">\n<ol><li>\n<a href="#heading-2a" class="head-h2">Heading 2a</a>\n<ol>\n<li><a href="#heading-3c" class="head-h3">Heading 3c</a>\n</li></ol>\n</li>\n<li>\n<ol><li>\n<a href="#heading-3d" class="head-h3">Heading 3d</a></li>\n<li><a href="#heading-3e" class="head-h3">Heading 3e</a></li>\n</ol></li></ol>\n</nav>'
+      }
+    },
+
+    {
+      md: '<h4>Heading 0-h4</h4>\n<h2 class="nomenu">Heading 1-h2</h2>\n<h4>Heading 2-h4</h4>\n<h3>Heading 3-h3</h3>\n<h3>Heading 4-h3</h3>\n<h2>Heading 5-h2</h2>\n<h4>Heading 6-h4</h3>\n<h3>Heading 7-h3</h3>',
+      out: {
+        content: '<h4 id="heading-0h4" tabindex="-1">Heading 0-h4 <a href="#heading-0h4" class="headlink">#</a></h4>\n<h2 class="nomenu" id="heading-1h2" tabindex="-1">Heading 1-h2 <a href="#heading-1h2" class="headlink">#</a></h2>\n<h4 id="heading-2h4" tabindex="-1">Heading 2-h4 <a href="#heading-2h4" class="headlink">#</a></h4>\n<h3 id="heading-3h3" tabindex="-1">Heading 3-h3 <a href="#heading-3h3" class="headlink">#</a></h3>\n<h3 id="heading-4h3" tabindex="-1">Heading 4-h3 <a href="#heading-4h3" class="headlink">#</a></h3>\n<h2 id="heading-5h2" tabindex="-1">Heading 5-h2 <a href="#heading-5h2" class="headlink">#</a></h2>\n<h4 id="heading-6h4" tabindex="-1">Heading 6-h4 <a href="#heading-6h4" class="headlink">#</a></h4>\n<h3 id="heading-7h3" tabindex="-1">Heading 7-h3 <a href="#heading-7h3" class="headlink">#</a></h3>',
+        navHeading: '<nav class="contents">\n<ol><li>\n<ol><li>\n<ol><li>\n<a href="#heading-0h4" class="head-h4">Heading 0-h4</a>\n</li></ol>\n</li></ol>\n</li>\n<li>\n<ol><li>\n<ol><li>\n<a href="#heading-2h4" class="head-h4">Heading 2-h4</a>\n</li></ol>\n</li>\n<li><a href="#heading-3h3" class="head-h3">Heading 3-h3</a></li>\n<li><a href="#heading-4h3" class="head-h3">Heading 4-h3</a>\n</li></ol>\n</li>\n<li><a href="#heading-5h2" class="head-h2">Heading 5-h2</a>\n<ol><li>\n<ol><li>\n<a href="#heading-6h4" class="head-h4">Heading 6-h4</a>\n</li></ol>\n</li>\n<li><a href="#heading-7h3" class="head-h3">Heading 7-h3</a>\n</li></ol></li></ol>\n</nav>'
+      }
+    },
 
   ].forEach((set, idx) => {
 
@@ -213,7 +238,6 @@ describe('lib.js/mdHTML and navHeading functions', () => {
   });
 
 });
-
 
 
 describe('lib.js/chunk function', () => {

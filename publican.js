@@ -73,8 +73,10 @@ export class Publican {
 
       // heading anchors
       headingAnchor: {
+        nolink: 'nolink',
         linkContent: '#',
         linkClass: 'headlink',
+        nomenu: 'nomenu',
         navClass: 'contents',
         tag: 'nav-heading'
       },

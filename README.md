@@ -175,15 +175,21 @@ Note the template string cannot be delimited with `` ` `` backticks if they cont
 
 ### Markdown notes
 
-You can use template literals in markdown content but some care may be necessary to avoid problems with the HTML conversion. Simple expressions such as `${ data.title }` will usually work as expected. However:
+You can use template literals in markdown content but some care may be necessary to avoid problems with HTML conversion. Simpler expressions will work as expected, but you may need to use a double-bracket `${{ expression }}` in some situations. This denotes a *real* expression irrespective of where it resides in the markdown. Use them when you have complex nested expressions:
 
-* `${ expressions }` in code blocks will not execute
-* complex expressions such as `${ data.all.map(i => i.title) }` can break the markdown to HTML parser.
+```js
+${{ toArray( tacs.all ).map(i => i.title && `<li>${ i.title }</li>`) }}
+```
 
+or want to execute an expression inside a code block:
 
-To work around these restrictions, you can:
+```md
+```js
+console.log( '${{ data.title }}' );
+```
 
-1. Use a double-bracket `${{ expression }}`. This denotes a *real* expression irrespective of where it resides in the markdown.
+If this does not solve your problem, you can:
+
 1. Use HTML snippets in your markdown file, such as `<p>${ expression }</p>`.
 1. Simplify expressions using [custom jsTACS functions](#custom-jstacs-data-and-functions).
 1. Only use complex expressions in HTML content or template files.

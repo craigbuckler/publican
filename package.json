@@ -1,6 +1,6 @@
 {
   "name": "publican",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Publican is a simple and fast HTML-first static site generator for Node.js",
   "type": "module",
   "main": "publican.js",

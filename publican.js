@@ -425,6 +425,9 @@ export class Publican {
     // ensure pages using data.contentRendered are processed last
     fInfo.renderPriority = fInfo.content.includes('.contentRendered') ? -2 : 0;
 
+    // debug flag
+    fInfo.debug = fInfo.debug && String(fInfo.debug).trim().toLowerCase() !== 'false';
+
     // custom processing: processContent hook
     this.config.processContent.forEach(fn => fn(fInfo, filename));
 

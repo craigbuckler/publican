@@ -175,17 +175,20 @@ Note the template string cannot be delimited with `` ` `` backticks if they cont
 
 ### Markdown notes
 
-You can use template literals in markdown content but some care may be necessary to avoid problems with HTML conversion. Simpler expressions will work as expected, but you may need to use a double-bracket `${{ expression }}` in some situations. This denotes a *real* expression irrespective of where it resides in the markdown. Use them when you have complex nested expressions:
+You can use template literals in markdown content but some care may be necessary to avoid problems with HTML conversion.
+
+Simpler expressions will work as expected, but you can use double-bracket `${{ expressions }}` or `!{{ expressions }}` when necessary. This denotes a *real* expression irrespective of where it resides in the markdown. Use them in markdown code blocks when an expression must be parsed rather than shown as-is:
 
 ```js
-${{ toArray( tacs.all ).map(i => i.title && `<li>${ i.title }</li>`) }}
-```
+// ```js code block inside markdown
 
-or want to execute an expression inside a code block:
+   console.log( '${ data.title }' );
+// expression rendered as code:
+// console.log( '${ data.title }' );
 
-```md
-```js
-console.log( '${{ data.title }}' );
+   console.log( '${{ data.title }}' );
+// expression rendered as string:
+// console.log( 'This Page Heading' );
 ```
 
 If this does not solve your problem, you can:
@@ -196,9 +199,9 @@ If this does not solve your problem, you can:
 
 You can used escape characters to avoid any template expression processing:
 
-* for `` ` `` backticks, use `&#96;`
-* for `${`, use `&#36;{`
 * for `!{`, use `&#33;{`
+* for `${`, use `&#36;{`
+* for `` ` `` backticks, use `&#96;`
 
 
 ## Post properties

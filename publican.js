@@ -68,7 +68,8 @@ export class Publican {
         prism: {
           defaultLanguage: 'js',
           highlightInlineCode: true
-        }
+        },
+        use: new Set()
       },
 
       // heading anchors

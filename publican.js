@@ -4,7 +4,7 @@ https://www.npmjs.com/package/publican
 By Craig Buckler
 */
 import { readdir, mkdir, rm, readFile, writeFile, cp } from 'node:fs/promises';
-import { sep, join, dirname, basename } from 'node:path';
+import { sep, join, dirname, basename, extname } from 'node:path';
 import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
@@ -26,6 +26,7 @@ export class Publican {
   #now = new Date();
   #watchDebounce = null;
   #reRendering = false;
+  #jsBackTick = '\u02cb\u02cb';
 
   // set defaults
   constructor() {
@@ -38,6 +39,9 @@ export class Publican {
         template: './src/template/',
         build:    './build/'
       },
+
+      // index filename
+      indexFilename: 'index.html',
 
       // root
       root: '/',
@@ -126,7 +130,7 @@ export class Publican {
       // event functions to process incoming template files (filename, string)
       processTemplate: new Set(),
 
-      // event functions called once before rendering ()
+      // event functions called once before rendering (tacs object)
       processRenderStart: new Set(),
 
       // event functions to process content before rendering (post data object)
@@ -135,8 +139,8 @@ export class Publican {
       // event functions to process content after rendering (post data object, string output)
       processPostRender: new Set(),
 
-      // event functions called once after rendering ([{slug,content}, {slug,content}, ...])
-      processRenderComplete: new Set(),
+      // event functions called once after rendering ([{slug,content}, {slug,content}, ...], tacs object)
+      processRenderEnd: new Set(),
 
       // directory pass-through { from (relative to project), to (relative to dir.build) }
       passThrough: new Set(),
@@ -358,17 +362,27 @@ export class Publican {
       fInfo = parseFrontMatter( fData.fm );
 
     fInfo.filename = filename;
-    fInfo.slug = fInfo.slug || slugify(filename, this.config.slugReplace);
+    fInfo.slug = fInfo.slug || slugify(filename, this.config.indexFilename, this.config.slugReplace);
     if (!fInfo.slug || typeof fInfo.slug !== 'string' || fInfo.slug.includes('..')) {
       throw new Error(`[Publican] invalid slug "${ fInfo.slug }" for file: ${ filename }`);
     }
-    fInfo.link = join(this.config.root, fInfo.slug).replace(/index\.html/, '').replaceAll(sep, '/');
+
+    // get link (slug without index.html)
+    const reIndexFn = new RegExp(this.config.indexFilename.replace(/\./g, '\\.') + '$');
+    fInfo.link = join(this.config.root, fInfo.slug).replace(reIndexFn, '').replaceAll(sep, '/');
+
     fInfo.directory = dirname( fInfo.slug ).replaceAll(sep, '/').replace(/\/.*$/, '');
     fInfo.date = fInfo.date ? new Date(fInfo.date) : null;
     fInfo.priority = parseFloat(fInfo.priority) || 0.1;
-    fInfo.isMD = fInfo.filename?.toLowerCase().endsWith('.md'),
-    fInfo.isHTML = fInfo.slug.endsWith('.html'),
-    fInfo.isXML = fInfo.slug.endsWith('.xml');
+    fInfo.isMD = extname(fInfo.filename)?.toLowerCase() === '.md';
+
+    const ext = (extname(fInfo.slug) || '').toLowerCase();
+
+    fInfo.isIndexPage = fInfo.slug.endsWith(this.config.indexFilename);
+    fInfo.isHTML = ext.includes('htm');
+    fInfo.isXML = ext === '.xml';
+    fInfo.isCSS = ext === '.css';
+    fInfo.isJS = ext === '.js' || ext === '.mjs' || ext === '.cjs';
 
     // format tags
     if (this.config.tagPages && fInfo.tags) {
@@ -383,7 +397,7 @@ export class Publican {
 
         const
           ref = normalize(tag),
-          slug = join(this.config.tagPages.root || '', ref).replaceAll(sep, '/') + '/index.html',
+          slug = join(this.config.tagPages.root || '', ref).replaceAll(sep, '/') + '/' + this.config.indexFilename,
           link = join(this.config.root, dirname(slug)).replaceAll(sep, '/') + '/';
 
         return { tag, ref, link, slug };
@@ -402,15 +416,18 @@ export class Publican {
     }
 
     // menu
-    if (fInfo.menu?.toLowerCase() === 'false') fInfo.menu = false;
+    if (!fInfo.menu) {
+      fInfo.menu = (fInfo.isHTML || fInfo.isIndexPage) ? (fInfo.title || properCase(fInfo.directory) || '0') : '0';
+    }
+    if (fInfo.menu === '0' || fInfo.menu?.toLowerCase() === 'false') fInfo.menu = false;
 
     // index frequency
-    fInfo.index = fInfo.index || this.config.indexFrequency;
-    if (fInfo.index.toLowerCase() === 'false') fInfo.index = false;
+    fInfo.index = fInfo.index || (fInfo.isHTML || fInfo.isIndexPage ? this.config.indexFrequency : '0');
+    if (fInfo.index === '0' || fInfo.index.toLowerCase() === 'false') fInfo.index = false;
 
     // word count
     fInfo.wordCount = 0;
-    if (fInfo.index !== false) {
+    if (fInfo.isHTML) {
       fInfo.wordCount = 1 + ((fInfo.title || '') + ' ' + fData.content)
         .replace(/<.+?>/g, ' ')
         .replace(/\W/g, ' ')
@@ -422,6 +439,16 @@ export class Publican {
 
     // content - convert markdown to HTML if necessary
     fInfo.content = fInfo.isMD ? mdHTML(fData.content, this.config.markdownOptions) : fData.content;
+
+    // convert CSS character entities from \XXXX to \uXXXX
+    if (fInfo.isCSS) {
+      fInfo.content = fInfo.content.replace(/\\([0-9A-Z]{4,})/gi, '\\u$1');
+    }
+
+    // escape JS backticks
+    if (fInfo.isJS) {
+      fInfo.content = fInfo.content.replaceAll('`', this.#jsBackTick);
+    }
 
     // ensure pages using data.contentRendered are processed last
     fInfo.renderPriority = fInfo.content.includes('.contentRendered') ? -2 : 0;
@@ -489,7 +516,7 @@ export class Publican {
       const dir = data.directory;
       if (
         data.link !== '/' &&
-        data.slug !== dir + '/index.html' &&
+        data.slug !== dir + '/' + this.config.indexFilename &&
         data.index !== false
       ) {
 
@@ -552,7 +579,7 @@ export class Publican {
         this.config.dirPages.template
       ).forEach((fInfo, slug) => {
 
-        fInfo.title = tacs.all.get(fInfo.directory + '/index.html')?.title || properCase(fInfo.directory);
+        fInfo.title = tacs.all.get(fInfo.directory + '/' + this.config.indexFilename)?.title || properCase(fInfo.directory);
         tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
 
       });
@@ -601,7 +628,7 @@ export class Publican {
     const nav = {};
     tacs.all.forEach(data => {
 
-      if (data.pagination?.pageCurrent) return;
+      if ((!data.isHTML && !data.isIndexPage) || data.pagination?.pageCurrent) return;
 
       const sPath = data.slug.split('/');
       if (sPath.length === 1) sPath.unshift('/');
@@ -611,7 +638,7 @@ export class Publican {
 
         const p = sPath.shift();
 
-        if (p === 'index.html') {
+        if (p === this.config.indexFilename) {
           navMap.data = data;
         }
 
@@ -699,13 +726,15 @@ export class Publican {
       content = strReplacer( content, this.config?.replace );
 
       // add !{ strings back
-      content = content.replace(/\$\{/g, '!{');
+      const useTemplate = data.template || ((data.isIndexPage || data.isHTML) && this.config.defaultHTMLTemplate);
+      if (useTemplate) {
+        content = content.replace(/\$\{/g, '!{');
+      }
 
       // store rendered content (for feeds)
       data.contentRendered = content;
 
       // render in template
-      const useTemplate = data.template || (data.isHTML && this.config.defaultHTMLTemplate);
       if (useTemplate) {
 
         const contentOrig = data.content;
@@ -723,6 +752,13 @@ export class Publican {
       // replace navigation heading
       if (contentNav) {
         content = content.replaceAll(navHeadingTag, contentNav + navHeadingTag);
+        data.contentRendered = data.contentRendered.replaceAll(navHeadingTag, contentNav + navHeadingTag);
+      }
+
+      // replace backticks in JS
+      if (data.isJS) {
+        content = content.replaceAll(this.#jsBackTick, '`');
+        data.contentRendered = data.contentRendered.replaceAll(this.#jsBackTick, '`');
       }
 
       // custom processing: processPostRender hook
@@ -767,6 +803,9 @@ export class Publican {
       })
     );
 
+    // custom processing: processRenderEnd hook
+    this.config.processRenderEnd.forEach(fn => fn(write, tacs));
+
     performance.mark('writeFiles:end');
 
     return write.length;
@@ -804,12 +843,14 @@ export class Publican {
 
       for (let p = 0; p < pageTotal; p++) {
 
-        const slug = join(root, name, String(p ? p : ''), '/index.html').replaceAll(sep, '/');
+        const
+          slug = join(root, name, String(p ? p : ''), '/' + this.config.indexFilename).replaceAll(sep, '/'),
+          reIndexFn = new RegExp(this.config.indexFilename.replace(/\./g, '\\.') + '$');
 
         pages.set(slug, {
           name,
           slug,
-          link: join(this.config.root, slug).replaceAll(sep, '/').replace(/index\.html/, ''),
+          link: join(this.config.root, slug).replaceAll(sep, '/').replace(reIndexFn, ''),
           directory: dirname( slug ).replaceAll(sep, '/').replace(/\/.*$/, ''),
           date: this.#now,
           isHTML: true,

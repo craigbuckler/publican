@@ -1,6 +1,6 @@
 {
   "name": "publican",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Publican is a simple and fast HTML-first static site generator for Node.js",
   "type": "module",
   "main": "publican.js",
@@ -35,7 +35,7 @@
   "bugs": {
     "url": "https://github.com/craigbuckler/publican/issues"
   },
-  "homepage": "https://github.com/craigbuckler/publican#readme",
+  "homepage": "https://publican.dev/",
   "dependencies": {
     "html-minifier-security-fix": "4.0.0",
     "jstacs": "0.3.0",

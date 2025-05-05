@@ -3,10 +3,11 @@ import { slugify, properCase, normalize, extractFmContent, parseFrontMatter, mdH
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 
+const padDefault = 40;
 
-describe('lib.js/slugify function', () => {
+describe('lib.js/slugify function'.padEnd( 77 ), () => {
 
-  const pad = 20;
+  const pad = 30;
 
   [
 
@@ -17,6 +18,7 @@ describe('lib.js/slugify function', () => {
     ['article.html', 'article/index.html'],
     ['article.md', 'article/index.html'],
     ['article/!index.html', 'article/index.html'],
+    ['article/Index.html', 'article/Index/index.html'],
     ['article/#index.md', 'article/index.html'],
     ['article/an-index.md', 'article/an-index/index.html'],
     ['tag/post.md', 'tag/post/index.html'],
@@ -24,16 +26,20 @@ describe('lib.js/slugify function', () => {
     ['tag/post.json', 'tag/post.json'],
     ['win\\dir\\index.md', 'win/dir/index.html'],
     ['01_post/02_article.md', 'post/article/index.html'],
+    ['article/Index.html', 'article/Index.HTM', 'Index.HTM'],
+    ['#default.html', 'default.htm', 'default.htm'],
+    ['Index.html', 'Index/default.htm', 'default.htm'],
 
   ].forEach(set => {
 
     const
       input = set[0],
-      output = set[1] || set[0];
+      output = set[1] || set[0],
+      indexFn = set[2] || 'index.html';
 
     it(
-      `slugify ${ input.padEnd(pad) } => ${ output.padEnd(pad) }`,
-      () => assert.strictEqual(slugify( input, new Map([
+      `slugify    ${ input.padEnd(pad) } => ${ output.padEnd(pad) }`,
+      () => assert.strictEqual(slugify( input, indexFn, new Map([
         [/\d{2,}_/g, ''] // removes NN_ from slug
       ]) ), output)
     );
@@ -43,9 +49,9 @@ describe('lib.js/slugify function', () => {
 });
 
 
-describe('lib.js/properCase function', () => {
+describe('lib.js/properCase function'.padEnd( 77 ), () => {
 
-  const pad = 18;
+  const pad = 30;
 
   [
 
@@ -70,9 +76,9 @@ describe('lib.js/properCase function', () => {
 });
 
 
-describe('lib.js/normalize function', () => {
+describe('lib.js/normalize function'.padEnd( 77 ), () => {
 
-  const pad = 18;
+  const pad = 30;
 
   [
 
@@ -88,7 +94,7 @@ describe('lib.js/normalize function', () => {
       output = set[1] || set[0];
 
     it(
-      `normalize ${ input.padEnd(pad) } => ${ output.padEnd(pad) }`,
+      `normalize  ${ input.padEnd(pad) } => ${ output.padEnd(pad) }`,
       () => assert.strictEqual(normalize( input ), output)
     );
 
@@ -97,7 +103,7 @@ describe('lib.js/normalize function', () => {
 });
 
 
-describe('lib.js/extractFmContent function', () => {
+describe('lib.js/extractFmContent function'.padEnd( padDefault + 2 ), () => {
 
   [
 
@@ -110,7 +116,7 @@ describe('lib.js/extractFmContent function', () => {
     const input = `---\n${ output.fm }\n---\n${ output.content }\n`;
 
     it(
-      `extractFmContent test ${ idx + 1 }`,
+      `extractFmContent test ${ idx + 1 }`.padEnd( padDefault ),
       () => assert.deepStrictEqual(extractFmContent( input ), output)
     );
 
@@ -119,7 +125,7 @@ describe('lib.js/extractFmContent function', () => {
 });
 
 
-describe('lib.js/parseFrontMatter function', () => {
+describe('lib.js/parseFrontMatter function'.padEnd( padDefault + 2 ), () => {
 
   [
     { title: 'title one', value: true },
@@ -134,7 +140,7 @@ describe('lib.js/parseFrontMatter function', () => {
     }
 
     it(
-      `parseFrontMatter test ${ idx + 1 }`,
+      `parseFrontMatter test ${ idx + 1 }`.padEnd( padDefault ),
       () => assert.deepStrictEqual(parseFrontMatter( input ), output)
     );
 
@@ -143,7 +149,7 @@ describe('lib.js/parseFrontMatter function', () => {
 });
 
 
-describe('lib.js/mdHTML and navHeading functions', () => {
+describe('lib.js/mdHTML and navHeading functions'.padEnd( padDefault + 2 ), () => {
 
   const
     markdownOptions = {
@@ -231,7 +237,7 @@ describe('lib.js/mdHTML and navHeading functions', () => {
     result.navHeading = minifySimple(result.navHeading);
 
     it(
-      `mdHTML test ${ idx + 1 }`,
+      `mdHTML test ${ idx + 1 }`.padEnd( padDefault ),
       () => assert.deepStrictEqual(result, set.out)
     );
 
@@ -240,7 +246,7 @@ describe('lib.js/mdHTML and navHeading functions', () => {
 });
 
 
-describe('lib.js/chunk function', () => {
+describe('lib.js/chunk function'.padEnd( padDefault + 2 ), () => {
 
   [
 
@@ -263,7 +269,7 @@ describe('lib.js/chunk function', () => {
   ].forEach((set, idx) => {
 
     it(
-      `chunk test ${ idx + 1 }`,
+      `chunk test ${ idx + 1 }`.padEnd( padDefault ),
       () => assert.deepStrictEqual(chunk( set.in, set.chunkSize ), set.out)
     );
 
@@ -272,7 +278,7 @@ describe('lib.js/chunk function', () => {
 });
 
 
-describe('lib.js/strReplacer function', () => {
+describe('lib.js/strReplacer function'.padEnd( padDefault + 2 ), () => {
 
   // replacement map
   const map = new Map([
@@ -304,7 +310,7 @@ describe('lib.js/strReplacer function', () => {
   ].forEach((set, idx) => {
 
     it(
-      `strReplacer test ${ idx + 1 }`,
+      `strReplacer test ${ idx + 1 }`.padEnd( padDefault ),
       () => assert.deepStrictEqual(strReplacer( set.str, map ), set.out)
     );
 
@@ -313,7 +319,7 @@ describe('lib.js/strReplacer function', () => {
 });
 
 
-describe('lib.js/strHash function', () => {
+describe('lib.js/strHash function'.padEnd( padDefault + 2 ), () => {
 
   [
     ['abc123', 'Abc123'],
@@ -322,7 +328,7 @@ describe('lib.js/strHash function', () => {
   ].forEach((set, idx) => {
 
     it(
-      `strHash test ${ idx + 1 }`,
+      `strHash test ${ idx + 1 }`.padEnd( padDefault ),
       () => assert.notEqual(strHash(set[0]), strHash(set[1]))
     );
 

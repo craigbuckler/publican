@@ -92,6 +92,7 @@ export class Publican {
         sortBy: 'priority',
         sortOrder: -1,
         template: 'default.html',
+        index: 'monthly',
         dir: {} // custom directory sort
       },
 
@@ -579,7 +580,12 @@ export class Publican {
         this.config.dirPages.template
       ).forEach((fInfo, slug) => {
 
-        fInfo.title = tacs.all.get(fInfo.directory + '/' + this.config.indexFilename)?.title || properCase(fInfo.directory);
+        const rootPage = tacs.all.get( fInfo.directory + '/' + this.config.indexFilename );
+        fInfo.isDirIndex = rootPage?.title || properCase(fInfo.directory);
+        fInfo.title = fInfo.isDirIndex;
+        fInfo.description = rootPage?.description || fInfo.title;
+        fInfo.index = this.config.dirPages.index || false;
+
         tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
 
       });
@@ -615,9 +621,12 @@ export class Publican {
         this.config.tagPages.template
       ).forEach((fInfo, slug) => {
 
-        fInfo.title = tagName.get( fInfo.name );
+        fInfo.isTagIndex = tagName.get( fInfo.name );
+        fInfo.title = fInfo.isTagIndex;
+        fInfo.description = fInfo.isTagIndex;
         fInfo.menu = this.config.tagPages.menu;
         fInfo.index = this.config.tagPages.index || false;
+
         tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
 
       });
@@ -853,6 +862,7 @@ export class Publican {
           link: join(this.config.root, slug).replaceAll(sep, '/').replace(reIndexFn, ''),
           directory: dirname( slug ).replaceAll(sep, '/').replace(/\/.*$/, ''),
           date: this.#now,
+          isIndexPage: true,
           isHTML: true,
           priority: 0.1,
           renderPriority: -1,

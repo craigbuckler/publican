@@ -1,6 +1,6 @@
 {
   "name": "publican",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Publican is a simple and fast HTML-first static site generator for Node.js",
   "type": "module",
   "main": "publican.js",
@@ -37,9 +37,11 @@
   },
   "homepage": "https://publican.dev/",
   "dependencies": {
+    "concol": "2.1.0",
     "html-minifier-security-fix": "4.0.0",
     "jstacs": "0.3.0",
     "markdown-it": "14.1.0",
-    "markdown-it-prism": "3.0.0"
+    "markdown-it-prism": "3.0.0",
+    "perfpro": "0.2.0"
   }
 }

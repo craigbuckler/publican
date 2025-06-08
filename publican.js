@@ -5,12 +5,19 @@ By Craig Buckler
 */
 import { readdir, mkdir, rm, readFile, writeFile, cp } from 'node:fs/promises';
 import { sep, join, dirname, basename, extname } from 'node:path';
-import { performance } from 'perf_hooks';
 import { watch } from 'node:fs';
 
-import { slugify, properCase, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, minifyFull, chunk, strReplacer, strHash } from './lib/lib.js';
 import { tacsConfig, tacs, templateMap, templateParse } from 'jstacs';
+import { PerfPro } from 'perfpro';
+import { ConCol } from 'concol';
 
+import { slugify, properCase, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, minifyFull, chunk, strReplacer, strHash } from './lib/lib.js';
+
+// performance handler
+const perf = new PerfPro('Publican');
+
+// console logger
+export const concol = new ConCol('Publican', 'blue');
 
 // export jsTACS
 export * from 'jstacs';
@@ -26,7 +33,9 @@ export class Publican {
   #now = new Date();
   #watchDebounce = null;
   #reRendering = false;
-  #jsBackTick = '\u02cb\u02cb';
+
+  static #jsBackTick = '\u02cb\u02cb';
+  static #logLine = '─'.repeat(43);
 
   // set defaults
   constructor() {
@@ -168,7 +177,7 @@ export class Publican {
       await rm(this.config.dir.build, { recursive: true });
     }
     catch (e) {
-      if (this.config.logLevel > 1) console.warn(`\n[Publican] unable to delete ${ this.config.dir.build } build directory\n           ${ e }`);
+      if (this.config.logLevel > 1) concol.warn(`unable to delete ${ this.config.dir.build } build directory\n${ e }`);
     }
 
   }
@@ -177,12 +186,27 @@ export class Publican {
   // build site
   async build() {
 
-    performance.mark('build:start');
+    if (this.config.logLevel > 1) {
+
+      concol.log([
+
+        Publican.#logLine,
+        '   ____        _     _ _',
+        '  |  _ \\ _   _| |__ | (_) ___ __ _ _ __',
+        '  | | ) | | | | \'_ \\| | |/ __/ _` | \'_ \\',
+        '  | |/_/| |_| | |_) | | | (_| (_| | | | |',
+        '  |_|    \\__,_|_.__/|_|_|\\___\\__,_|_| |_|',
+        '  a simpler Node.js static site generator',
+        '           https://publican.dev/',
+        ''
+      ]);
+
+    }
 
     // pass template directory
     tacsConfig.dir.template = this.config.dir.template;
 
-    performance.mark('processFiles:start');
+    perf.mark('read content files');
 
     // fetch and process content and template files
     const file = (await Promise.allSettled([
@@ -193,7 +217,7 @@ export class Publican {
     file[0].forEach((content, filename) => this.addContent(filename, content));
     file[1].forEach((content, filename) => this.addTemplate(filename, content));
 
-    performance.mark('processFiles:end');
+    perf.mark('read content files');
 
     // render content
     const written = await this.#render();
@@ -201,15 +225,13 @@ export class Publican {
     // copy passthrough files
     await this.#copyPassThrough();
 
-    performance.mark('build:end');
-
     // output metrics
-    this.#showMetrics(written, ['build', 'processFiles', 'render', 'writeFiles', 'passThrough']);
+    this.#showMetrics(written, true);
 
     // watch for file changes
     if (this.config.watch) {
 
-      if (this.config.logLevel > 0) console.info('\n[Publican] watching for changes...');
+      if (this.config.logLevel) concol.info('watching for changes...');
       this.#watcher();
 
     }
@@ -248,9 +270,7 @@ export class Publican {
 
       this.#reRendering = true;
 
-      if (!performance.getEntriesByType('mark').length) {
-        performance.mark('rebuild:start');
-      }
+      perf.mark('TOTAL REBUILD TIME');
 
       const
         cFiles = [...content],
@@ -258,6 +278,8 @@ export class Publican {
 
       content.clear();
       template.clear();
+
+      perf.mark('read content files');
 
       // process content changes
       await Promise.allSettled(
@@ -275,12 +297,14 @@ export class Publican {
         })
       );
 
+      perf.mark('read content files');
+
       // render if no more changes
       if (!content.size && !template.size) {
 
         const written = await this.#render();
-        performance.mark('rebuild:end');
-        this.#showMetrics(written, ['rebuild']);
+        perf.mark('TOTAL REBUILD TIME');
+        this.#showMetrics(written);
 
       }
 
@@ -293,24 +317,27 @@ export class Publican {
 
 
   // show performance metrics
-  #showMetrics(written, metrics = []) {
+  #showMetrics(written, initialBuild) {
 
     if (written && this.config.logLevel) {
 
-      console.info('[Publican] files output:' + String(written).padStart(5, ' '));
+      concol.log([ 'website files output', written ]);
+      if (initialBuild) concol.log([ 'TOTAL PROCESSING TIME', perf.now(), ' ms' ]);
 
       if (this.config.logLevel > 1) {
-        metrics.forEach(m => {
 
-          const p = Math.ceil( performance.measure(m, m + ':start', m + ':end').duration);
-          console.info(m.padStart(23,' ') + ':' + String(p).padStart(5, ' ') + 'ms');
+        // show metrics
+        concol.log([
+          ...perf.allDurations().map(p => [ p.name, p.duration, ' ms']),
+        ]);
 
-        });
       }
 
-    }
+      if (initialBuild) concol.log(['', Publican.#logLine, '']);
 
-    performance.clearMarks();
+      perf.clear();
+
+    }
 
   }
 
@@ -448,7 +475,7 @@ export class Publican {
 
     // escape JS backticks
     if (fInfo.isJS) {
-      fInfo.content = fInfo.content.replaceAll('`', this.#jsBackTick);
+      fInfo.content = fInfo.content.replaceAll('`', Publican.#jsBackTick);
     }
 
     // ensure pages using data.contentRendered are processed last
@@ -465,10 +492,9 @@ export class Publican {
 
     // debug
     if (fInfo.debug) {
-      const d = '-'.repeat(filename.length + 11);
-      console.log(`${ d }\n[Publican] ${ filename }\n${ d }`);
+      concol.log([ Publican.#logLine, filename, Publican.#logLine ]);
       console.dir(fInfo, { depth: null, color: true });
-      console.log(d);
+      concol.log(Publican.#logLine);
     }
 
   }
@@ -495,7 +521,7 @@ export class Publican {
   // render and build site
   async #render() {
 
-    performance.mark('render:start');
+    perf.mark('render web files');
 
     // TACS global content
     tacs.root = this.config.root;
@@ -766,8 +792,8 @@ export class Publican {
 
       // replace backticks in JS
       if (data.isJS) {
-        content = content.replaceAll(this.#jsBackTick, '`');
-        data.contentRendered = data.contentRendered.replaceAll(this.#jsBackTick, '`');
+        content = content.replaceAll(Publican.#jsBackTick, '`');
+        data.contentRendered = data.contentRendered.replaceAll(Publican.#jsBackTick, '`');
       }
 
       // custom processing: processPostRender hook
@@ -794,8 +820,8 @@ export class Publican {
 
     });
 
-    performance.mark('render:end');
-    performance.mark('writeFiles:start');
+    perf.mark('render web files');
+    perf.mark('write web files');
 
     // write content to changed files
     await Promise.allSettled(
@@ -815,7 +841,7 @@ export class Publican {
     // custom processing: processRenderEnd hook
     this.config.processRenderEnd.forEach(fn => fn(write, tacs));
 
-    performance.mark('writeFiles:end');
+    perf.mark('write web files');
 
     return write.length;
 
@@ -825,13 +851,13 @@ export class Publican {
   // copy pass-though files
   async #copyPassThrough() {
 
-    performance.mark('passThrough:start');
+    perf.mark('copy passThrough files');
 
     await Promise.allSettled(
       [...this.config.passThrough].map( pt => cp(pt.from, join(this.config.dir.build, pt.to), { recursive: true, force: true } ))
     );
 
-    performance.mark('passThrough:end');
+    perf.mark('copy passThrough files');
 
   }
 

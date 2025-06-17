@@ -25,10 +25,13 @@ describe('lib.js/slugify function'.padEnd( 77 ), () => {
     ['tag/post.html', 'tag/post/index.html'],
     ['tag/post.json', 'tag/post.json'],
     ['win\\dir\\index.md', 'win/dir/index.html'],
+    ['01_post/00_index.md', 'post/index.html'],
     ['01_post/02_article.md', 'post/article/index.html'],
     ['article/Index.html', 'article/Index.HTM', 'Index.HTM'],
     ['#default.html', 'default.htm', 'default.htm'],
     ['Index.html', 'Index/default.htm', 'default.htm'],
+    ['css/01_#main.css', 'css/#main.css'],
+    ['js\\!01_main.js', 'js/!main.js'],
 
   ].forEach(set => {
 

@@ -321,7 +321,7 @@ export class Publican {
 
     if (written && this.config.logLevel) {
 
-      concol.log([ 'website files output', written ]);
+      concol.log([ '', [ 'website files output', written ] ]);
       if (initialBuild) concol.log([ 'TOTAL PROCESSING TIME', perf.now(), ' ms' ]);
 
       if (this.config.logLevel > 1) {
@@ -457,7 +457,7 @@ export class Publican {
     fInfo.wordCount = 0;
     if (fInfo.isHTML) {
       fInfo.wordCount = 1 + ((fInfo.title || '') + ' ' + fData.content)
-        .replace(/<.+?>/g, ' ')
+        .replace(/<[^<]+?>/g, '')
         .replace(/\W/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()

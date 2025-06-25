@@ -12,6 +12,7 @@ import { PerfPro } from 'perfpro';
 import { ConCol } from 'concol';
 
 import { slugify, properCase, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, minifyFull, chunk, strReplacer, strHash } from './lib/lib.js';
+import pkg from './package.json' with { type: 'json' };
 
 // performance handler
 const perf = new PerfPro('Publican');
@@ -197,8 +198,8 @@ export class Publican {
         '  | |/_/| |_| | |_) | | | (_| (_| | | | |',
         '  |_|    \\__,_|_.__/|_|_|\\___\\__,_|_| |_|',
         '  a simpler Node.js static site generator',
+        (`version ${ pkg.version } `).padStart(29, ' '),
         '           https://publican.dev/',
-        ''
       ]);
 
     }
@@ -335,9 +336,9 @@ export class Publican {
 
       if (initialBuild) concol.log(['', Publican.#logLine, '']);
 
-      perf.clear();
-
     }
+
+    perf.clear();
 
   }
 
@@ -757,17 +758,25 @@ export class Publican {
         contentNav = nav.navHeading;
       }
 
-      // custom replacements
-      content = strReplacer( content, this.config?.replace );
-
       // add !{ strings back
       const useTemplate = data.template || ((data.isIndexPage || data.isHTML) && this.config.defaultHTMLTemplate);
       if (useTemplate) {
-        content = content.replace(/\$\{/g, '!{');
-      }
 
-      // store rendered content (for feeds)
-      data.contentRendered = content;
+        content = content.replace(/\$\{/g, '!{');
+
+        // rendered content (for feeds) with custom replacements
+        data.contentRendered = strReplacer( content, this.config?.replace );;
+
+      }
+      else {
+
+        // custom replacements
+        content = strReplacer( content, this.config?.replace );
+
+        // store rendered content (for feeds)
+        data.contentRendered = content;
+
+      }
 
       // render in template
       if (useTemplate) {

@@ -4,14 +4,14 @@ https://www.npmjs.com/package/publican
 By Craig Buckler
 */
 import { readdir, mkdir, rm, readFile, writeFile, cp } from 'node:fs/promises';
-import { sep, join, dirname, basename, extname } from 'node:path';
+import { join, dirname, basename, extname } from 'node:path';
 import { watch } from 'node:fs';
 
 import { tacsConfig, tacs, templateMap, templateParse } from 'jstacs';
 import { PerfPro } from 'perfpro';
 import { ConCol } from 'concol';
 
-import { slugify, properCase, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, minifyFull, chunk, strReplacer, strHash } from './lib/lib.js';
+import { posixPath, slugify, properCase, normalize, extractFmContent, parseFrontMatter, mdHTML, navHeading, minifySimple, minifyFull, chunk, strReplacer, strHash, fileInfo } from './lib/lib.js';
 import pkg from './package.json' with { type: 'json' };
 
 // performance handler
@@ -29,6 +29,7 @@ export class Publican {
 
   // private members
   #isDev = (process.env.NODE_ENV === 'development');
+  #status = {};
   #contentMap = new Map();
   #writeHash = new Map();
   #now = new Date();
@@ -116,6 +117,9 @@ export class Publican {
         menu: false,
         index: 'monthly'
       },
+
+      // navigation object enabled
+      nav: true,
 
       // minify options
       minify: {
@@ -209,11 +213,15 @@ export class Publican {
 
     perf.mark('read content files');
 
+    // directories exist?
+    this.#status.dirContent = await fileInfo(this.config.dir.content);
+    this.#status.dirTemplate = await fileInfo(this.config.dir.template);
+
     // fetch and process content and template files
     const file = (await Promise.allSettled([
       this.#readFileContents(this.config.dir.content),
       this.#readFileContents(this.config.dir.template),
-    ])).map(f => (f.status === 'fulfilled' ? f.value : new Map()));
+    ])).map(f => (f?.status === 'fulfilled' ? f.value : new Map()));
 
     file[0].forEach((content, filename) => this.addContent(filename, content));
     file[1].forEach((content, filename) => this.addTemplate(filename, content));
@@ -243,15 +251,19 @@ export class Publican {
 
     // watch for content change
     const contentDir = this.config.dir.content, content = new Set();
-    watch(contentDir, { recursive: true }, (event, fn) => {
-      content.add(fn); wait();
-    });
+    if (this.#status.dirContent.isDir) {
+      watch(contentDir, { recursive: true }, (event, fn) => {
+        content.add(fn); wait();
+      });
+    }
 
     // watch for template change
     const templateDir = this.config.dir.template, template = new Set();
-    watch(templateDir, { recursive: true }, (event, fn) => {
-      template.add(fn); wait();
-    });
+    if (this.#status.dirTemplate.isDir) {
+      watch(templateDir, { recursive: true }, (event, fn) => {
+        template.add(fn); wait();
+      });
+    }
 
     // debounce events
     const wait = () => {
@@ -367,6 +379,8 @@ export class Publican {
   // add and parse content
   addContent(filename, content) {
 
+    filename = posixPath( filename );
+
     // path error - cannot navigate to parent using '..'
     if (filename.includes('..')) {
       throw new Error('[Publican] content filename cannot include parent directory .. reference.');
@@ -398,9 +412,9 @@ export class Publican {
 
     // get link (slug without index.html)
     const reIndexFn = new RegExp(this.config.indexFilename.replace(/\./g, '\\.') + '$');
-    fInfo.link = join(this.config.root, fInfo.slug).replace(reIndexFn, '').replaceAll(sep, '/');
+    fInfo.link = posixPath( join(this.config.root, fInfo.slug).replace(reIndexFn, '') );
 
-    fInfo.directory = dirname( fInfo.slug ).replaceAll(sep, '/').replace(/\/.*$/, '');
+    fInfo.directory = posixPath( dirname( fInfo.slug ) ).replace(/\/.*$/, '');
     fInfo.date = fInfo.date ? new Date(fInfo.date) : null;
     fInfo.priority = parseFloat(fInfo.priority) || 0.1;
     fInfo.isMD = extname(fInfo.filename)?.toLowerCase() === '.md';
@@ -426,8 +440,8 @@ export class Publican {
 
         const
           ref = normalize(tag),
-          slug = join(this.config.tagPages.root || '', ref).replaceAll(sep, '/') + '/' + this.config.indexFilename,
-          link = join(this.config.root, dirname(slug)).replaceAll(sep, '/') + '/';
+          slug = posixPath( join(this.config.tagPages.root || '', ref) ) + '/' + this.config.indexFilename,
+          link = posixPath( join(this.config.root, dirname(slug)) ) + '/';
 
         return { tag, ref, link, slug };
 
@@ -503,6 +517,8 @@ export class Publican {
 
   // add and parse template
   addTemplate(filename, content) {
+
+    filename = posixPath( filename );
 
     // delete from Map
     if (content === undefined) {
@@ -697,7 +713,7 @@ export class Publican {
     // convert nav objects to arrays and sort
     const dP = this.config.dirPages;
 
-    tacs.nav = recurseNav(nav);
+    tacs.nav = this.config.nav ? recurseNav(nav) : [];
     function recurseNav(obj, dir) {
 
       const ret = Object.values(obj);
@@ -888,14 +904,14 @@ export class Publican {
       for (let p = 0; p < pageTotal; p++) {
 
         const
-          slug = join(root, name, String(p ? p : ''), '/' + this.config.indexFilename).replaceAll(sep, '/'),
+          slug = posixPath( join(root, name, String(p ? p : ''), '/' + this.config.indexFilename) ),
           reIndexFn = new RegExp(this.config.indexFilename.replace(/\./g, '\\.') + '$');
 
         pages.set(slug, {
           name,
           slug,
-          link: join(this.config.root, slug).replaceAll(sep, '/').replace(reIndexFn, ''),
-          directory: dirname( slug ).replaceAll(sep, '/').replace(/\/.*$/, ''),
+          link: posixPath( join(this.config.root, slug) ).replace(reIndexFn, ''),
+          directory: posixPath( dirname(slug) ).replace(/\/.*$/, ''),
           date: this.#now,
           isIndexPage: true,
           isHTML: true,
@@ -910,9 +926,9 @@ export class Publican {
             pageCurrent1: p + 1,
             subpageFrom1: p * size + 1,
             subpageTo1: Math.min(childPageTotal, (p + 1) * size),
-            hrefBack: p > 0 ? join(this.config.root, root, name, String(p > 1 ? p-1: ''), '/').replaceAll(sep, '/') : null,
-            hrefNext: p+1 < pageTotal ? join(this.config.root, root, name, String(p+1), '/').replaceAll(sep, '/') : null,
-            href: Array(pageTotal).fill(null).map((e, idx) => join(this.config.root, root, name, String(idx ? idx : ''), '/').replaceAll(sep, '/') )
+            hrefBack: p > 0 ? posixPath( join(this.config.root, root, name, String(p > 1 ? p-1: ''), '/') ) : null,
+            hrefNext: p+1 < pageTotal ? posixPath( join(this.config.root, root, name, String(p+1), '/') ) : null,
+            href: Array(pageTotal).fill(null).map((e, idx) => posixPath( join(this.config.root, root, name, String(idx ? idx : ''), '/') ) )
           }
         });
 

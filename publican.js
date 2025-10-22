@@ -118,6 +118,9 @@ export class Publican {
         index: 'monthly'
       },
 
+      // group page options
+      groupPages: false,
+
       // navigation object enabled
       nav: true,
 
@@ -383,7 +386,8 @@ export class Publican {
 
     // path error - cannot navigate to parent using '..'
     if (filename.includes('..')) {
-      throw new Error('[Publican] content filename cannot include parent directory .. reference.');
+      concol.error('content filename cannot include parent directory .. reference.');
+      process.exit(1);
     }
 
     // ignore files matching regex
@@ -407,7 +411,8 @@ export class Publican {
     fInfo.filename = filename;
     fInfo.slug = fInfo.slug || slugify(filename, this.config.indexFilename, this.config.slugReplace);
     if (!fInfo.slug || typeof fInfo.slug !== 'string' || fInfo.slug.includes('..')) {
-      throw new Error(`[Publican] invalid slug "${ fInfo.slug }" for file: ${ filename }`);
+      concol.error(`invalid slug "${ fInfo.slug }" for file: ${ filename }`);
+      process.exit(1);
     }
 
     // get link (slug without index.html)
@@ -450,6 +455,18 @@ export class Publican {
     }
     else {
       fInfo.tags = null;
+    }
+
+    // format groups
+    if (fInfo.groups) {
+
+      fInfo.groups = new Set(
+        fInfo.groups.split(',').map(v => v.trim().replace(/\s+/g, ' ')).filter(v => v)
+      );
+
+    }
+    else {
+      fInfo.groups = null;
     }
 
     // publication
@@ -545,6 +562,7 @@ export class Publican {
     tacs.all = new Map();
     tacs.dir = new Map();
     tacs.tag = new Map();
+    tacs.group = new Map();
     tacs.tagList = [];
 
     // tag slug to name map
@@ -555,6 +573,34 @@ export class Publican {
 
       // is a draft page?
       if (data.publish === false) return;
+
+      // append groups to post data using optional filter function
+      if (this.config?.groupPages?.list) {
+
+        for (const groupName in this.config.groupPages.list) {
+
+          const fn = this.config.groupPages.list[ groupName ]?.filter;
+
+          if (fn && fn(data)) {
+            data.groups = data.groups || new Set();
+            data.groups.add( groupName );
+          }
+        }
+
+      }
+
+      // create groups
+      if (data?.groups?.size) {
+
+        data.groups.forEach(groupName => {
+
+          const groupSet = tacs.group.get( groupName ) || [];
+          groupSet.push( data );
+          tacs.group.set(groupName, groupSet);
+
+        });
+
+      }
 
       // handle directories
       const dir = data.directory;
@@ -581,12 +627,72 @@ export class Publican {
 
       // pass to TACS
       if (tacs.all.has(data.slug)) {
-        throw new Error(`[Publican] same slug used in multiple places: ${ data.slug }`);
+        concol.error(`same slug used in multiple places: ${ data.slug }`);
+        process.exit(1);
       }
 
       tacs.all.set(data.slug, data);
 
     });
+
+    // group pages (overrides directory and tag pages)
+    if (this.config.groupPages && tacs.group.size) {
+
+      const paginateRoots = new Set();
+      tacs.group.forEach((list, groupName) => {
+
+        const
+          cfgDefault = this.config.groupPages,
+          cfg = this.config.groupPages?.list?.[groupName],
+          sB = cfg?.sortBy || cfgDefault?.sortBy || 'date',
+          sD = cfg?.sortOrder || cfgDefault?.sortOrder || -1;
+
+        // sort pages
+        list.sort( (a, b) => sD * (a[ sB ] - b[ sB ]) );
+        tacs.group.set(groupName, list);
+
+        // paginate
+        if (list.length && cfg && typeof cfg.root === 'string') {
+
+          // get root slug and page
+          const root = cfg.root || '';
+          if (paginateRoots.has(root)) {
+            concol.error(`group paginate root used by multiple groups: ${ root }`);
+            process.exit(1);
+          }
+          paginateRoots.add(root);
+
+          const rPage = dirname(
+            join(
+              posixPath( root ).replace(/\/+$/,'').replace(/^\/+/, ''),
+              this.config.indexFilename
+            )
+          ).replace(/^[.|/]*/, '');
+
+          const rootPage = tacs.all.get( join(rPage, this.config.indexFilename) );
+
+          // paginate
+          this.#paginate(
+            new Map([[ rPage, list ]]),
+            cfg.size || cfgDefault?.size || Infinity,
+            '',
+            cfg.template || cfgDefault?.template || this.config.defaultHTMLTemplate
+          ).forEach((fInfo, slug) => {
+
+            fInfo.isGroupIndex = groupName;
+            fInfo.title = rootPage?.title || properCase(groupName);
+            fInfo.description = rootPage?.description || fInfo.title;
+            fInfo.index = cfg.index || cfgDefault?.index || false;
+
+            tacs.all.set(slug, Object.assign(fInfo, tacs.all.get(slug) || {}));
+
+          });
+
+        }
+
+      });
+
+    }
 
     // directory pages
     if (this.config.dirPages) {
@@ -619,7 +725,7 @@ export class Publican {
       this.#paginate(
         tacs.dir,
         this.config.dirPages.size || Infinity,
-        this.config.dirPages.root || '',
+        '',
         this.config.dirPages.template
       ).forEach((fInfo, slug) => {
 
@@ -697,9 +803,6 @@ export class Publican {
         if (sPath.length) {
           navMap[p] = navMap[p] || { data: {}, children: {} };
           navMap = navMap[p];
-          navMap.data.title = navMap.data.title || properCase( p.replace(/\W/g, ' ').trim().replace(/\s+/g, ' ') );
-          navMap.data.priority = navMap.data.priority || 0.1;
-          navMap.data.date = navMap.data.date || this.#now;
           if (sPath.length > 1) {
             navMap = navMap.children;
           }
@@ -708,7 +811,6 @@ export class Publican {
       }
 
     });
-
 
     // convert nav objects to arrays and sort
     const dP = this.config.dirPages;
@@ -833,7 +935,8 @@ export class Publican {
 
       // slug error - cannot navigate to parent using '..'
       if (slug.includes('..')) {
-        throw new Error(`[Publican] slug cannot include parent directory .. reference: ${ slug }`);
+        concol.error(`slug cannot include parent directory .. reference: ${ slug }`);
+        process.exit(1);
       }
 
       if (this.#writeHash.get(slug) !== hash) {
@@ -904,7 +1007,7 @@ export class Publican {
       for (let p = 0; p < pageTotal; p++) {
 
         const
-          slug = posixPath( join(root, name, String(p ? p : ''), '/' + this.config.indexFilename) ),
+          slug = posixPath( join(root, name, String(p ? p : ''), '/' + this.config.indexFilename) ).replace(/^\/+/, ''),
           reIndexFn = new RegExp(this.config.indexFilename.replace(/\./g, '\\.') + '$');
 
         pages.set(slug, {

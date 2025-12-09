@@ -380,7 +380,7 @@ export class Publican {
 
 
   // add and parse content
-  addContent(filename, content) {
+  addContent(filename, content, dataObject = {}) {
 
     filename = posixPath( filename );
 
@@ -405,8 +405,11 @@ export class Publican {
       // extract front matter and content
       fData = extractFmContent(content, this.config.frontmatterDelimit),
 
-      // parse front matter
-      fInfo = parseFrontMatter( fData.fm );
+      // parse front matter from initial data object
+      fInfo = Object.assign( dataObject, parseFrontMatter( fData.fm ) );
+
+    // content passed in dataObject?
+    fData.content = fData.content || dataObject.content || '';
 
     fInfo.filename = filename;
     fInfo.slug = fInfo.slug || slugify(filename, this.config.indexFilename, this.config.slugReplace);
@@ -435,9 +438,11 @@ export class Publican {
     // format tags
     if (this.config.tagPages && fInfo.tags) {
 
+      // convert to array
+      if ( !Array.isArray(fInfo.tags) ) fInfo.tags = String( fInfo.tags ).split(',');
+
       fInfo.tags = [
-        ...new Set( (fInfo.tags).split(',')
-          .map(v => v.trim().replace(/\s+/g, ' ')) )
+        ...new Set( fInfo.tags.map(v => v.trim().replace(/\s+/g, ' ')).filter(v => v) )
       ];
 
       // create tag information
@@ -460,8 +465,11 @@ export class Publican {
     // format groups
     if (fInfo.groups) {
 
+      // convert to array
+      if ( !Array.isArray(fInfo.groups) ) fInfo.groups = String( fInfo.groups ).split(',');
+
       fInfo.groups = new Set(
-        fInfo.groups.split(',').map(v => v.trim().replace(/\s+/g, ' ')).filter(v => v)
+        fInfo.groups.map(v => v.trim().replace(/\s+/g, ' ')).filter(v => v)
       );
 
     }
@@ -476,14 +484,16 @@ export class Publican {
     }
 
     // menu
-    if (!fInfo.menu) {
+    if (fInfo.menu === true || fInfo.menu === undefined) {
       fInfo.menu = (fInfo.isHTML || fInfo.isIndexPage) ? (fInfo.title || properCase(fInfo.directory) || '0') : '0';
     }
-    if (fInfo.menu === '0' || fInfo.menu?.toLowerCase() === 'false') fInfo.menu = false;
+    if (!fInfo.menu || fInfo.menu === '0' || fInfo.menu?.toLowerCase() === 'false') fInfo.menu = false;
 
     // index frequency
-    fInfo.index = fInfo.index || (fInfo.isHTML || fInfo.isIndexPage ? this.config.indexFrequency : '0');
-    if (fInfo.index === '0' || fInfo.index.toLowerCase() === 'false') fInfo.index = false;
+    if (fInfo.index === true || fInfo.index === undefined) {
+      fInfo.index = (fInfo.isHTML || fInfo.isIndexPage ? this.config.indexFrequency : '0');
+    }
+    if (!fInfo.index || fInfo.index === '0' || fInfo.index.toLowerCase() === 'false') fInfo.index = false;
 
     // word count
     fInfo.wordCount = 0;
@@ -541,6 +551,11 @@ export class Publican {
     if (content === undefined) {
       templateMap.delete(filename);
       return;
+    }
+
+    // parse markdown template
+    if (extname(filename)?.toLowerCase() === '.md') {
+      content = mdHTML(content, this.config.markdownOptions);
     }
 
     // custom processing: processTemplate hook

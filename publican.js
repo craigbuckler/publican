@@ -679,7 +679,7 @@ export class Publican {
 
           const rPage = dirname(
             join(
-              posixPath( root ).replace(/\/+$/,'').replace(/^\/+/, ''),
+              posixPath( root ).replace(/\/+$/, '').replace(/^\/+/, ''),
               this.config.indexFilename
             )
           ).replace(/^[.|/]*/, '');
@@ -853,7 +853,7 @@ export class Publican {
 
       ret.sort( (a, b) => {
         let s = sD * (a.data[ sB ] == b.data[ sB ] ? 0 : a.data[ sB ] > b.data[ sB ] ? 1 : -1);
-        if (!s) s = s = b.data.date - a.data.date;
+        if (!s) s = b.data.date - a.data.date;
         return s;
       });
 
@@ -898,7 +898,7 @@ export class Publican {
         content = content.replace(/\$\{/g, '!{');
 
         // rendered content (for feeds) with custom replacements
-        data.contentRendered = strReplacer( content, this.config?.replace );;
+        data.contentRendered = strReplacer( content, this.config?.replace );
 
       }
       else {
@@ -1042,10 +1042,10 @@ export class Publican {
             pageTotal,
             pageCurrent: p,
             pageCurrent1: p + 1,
-            subpageFrom1: p * size + 1,
+            subpageFrom1: (p * size) + 1,
             subpageTo1: Math.min(childPageTotal, (p + 1) * size),
-            hrefBack: p > 0 ? posixPath( join(this.config.root, root, name, String(p > 1 ? p-1: ''), '/') ) : null,
-            hrefNext: p+1 < pageTotal ? posixPath( join(this.config.root, root, name, String(p+1), '/') ) : null,
+            hrefBack: p > 0 ? posixPath( join(this.config.root, root, name, String(p > 1 ? p - 1 : ''), '/') ) : null,
+            hrefNext: p + 1 < pageTotal ? posixPath( join(this.config.root, root, name, String(p + 1), '/') ) : null,
             href: Array(pageTotal).fill(null).map((e, idx) => posixPath( join(this.config.root, root, name, String(idx ? idx : ''), '/') ) )
           }
         });
